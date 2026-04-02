@@ -1,0 +1,9 @@
+{
+  "name": "AFL",
+  "categories": [
+    {"name": "Offence", "color": "#e94560", "labels": ["Goal", "Behind", "Handball", "Kick", "Mark", "Shot at Goal"]},
+    {"name": "Defence", "color": "#4ade80", "labels": ["Tackle", "Spoil", "Intercept", "Pressure Act", "Smother"]},
+    {"name": "Stoppages", "color": "#facc15", "labels": ["Ball-up", "Boundary Throw-in", "Kick-in"]},
+    {"name": "General", "color": "#a78bfa", "labels": ["Error", "Highlight"]}
+  ]
+}
