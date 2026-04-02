@@ -1,0 +1,9 @@
+videotagger/resources/ffmpeg.exe
+dist/
+build/
+*.spec.bak
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
