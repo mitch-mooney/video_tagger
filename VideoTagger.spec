@@ -14,8 +14,6 @@ except Exception:
     vlc_binaries = []
     vlc_datas = []
 
-block_cipher = None
-
 a = Analysis(
     ['main.py'],
     pathex=['.'],
@@ -25,17 +23,15 @@ a = Analysis(
     ] + vlc_datas,
     hiddenimports=['vlc', 'PyQt6.QtCore', 'PyQt6.QtWidgets', 'PyQt6.QtGui'],
     hookspath=[],
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
-    a.zipfiles,
     a.datas,
     [],
     name='VideoTagger',

@@ -10,13 +10,15 @@ from videotagger.models.project import Clip
 class PresentationWindow(QWidget):
     closed = pyqtSignal()
 
-    def __init__(self, video_path: str, clips: List[Clip], playlist_name: str, parent=None):
+    def __init__(self, video_path: str, clips: List[Clip], playlist_name: str,
+                 category_map: dict | None = None, parent=None):
         super().__init__(parent, Qt.WindowType.Window)
         self.setWindowTitle("Presentation Mode")
         self.setStyleSheet("background: black;")
         self._video_path = video_path
         self._clips = clips
         self._playlist_name = playlist_name
+        self._category_map: dict = category_map or {}
         self._current_index = 0
         self._instance = None
         self._player = None
@@ -91,7 +93,7 @@ class PresentationWindow(QWidget):
 
     def showFullScreen(self):
         super().showFullScreen()
-        self._play_clip(0)
+        QTimer.singleShot(0, lambda: self._play_clip(0))
         self._show_hud()
 
     def resizeEvent(self, event):
@@ -145,7 +147,9 @@ class PresentationWindow(QWidget):
         if not self._clips:
             return
         clip = self._clips[self._current_index]
-        self._clip_label.setText(clip.label)
+        cat_name = self._category_map.get(clip.category_id, "")
+        label_text = f"{cat_name} — {clip.label}" if cat_name else clip.label
+        self._clip_label.setText(label_text)
         self._counter_label.setText(f"{self._current_index + 1} / {len(self._clips)}")
         self._reposition_hud()
 
@@ -184,8 +188,8 @@ class PresentationWindow(QWidget):
             self._hud_timer.stop()
             if self._player is not None:
                 self._player.stop()
-            self.close()
             self.closed.emit()
+            self.close()
         elif key == Qt.Key.Key_Space:
             self._toggle_play()
         elif key == Qt.Key.Key_Left:

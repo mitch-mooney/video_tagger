@@ -137,12 +137,6 @@ class MainWindow(QMainWindow):
         self.tag_panel.refresh(self._project)
 
     def _load_project(self, project: Project, path):
-        from videotagger.core.tagging_engine import TaggingEngine
-        self._project = project
-        self._project_path = path
-        self._tagging_engine = TaggingEngine()
-        self._save_act.setEnabled(True)
-        self.setWindowTitle(f"VideoTagger — {project.video_path}")
         import os
         if not os.path.exists(project.video_path):
             from PyQt6.QtWidgets import QMessageBox, QFileDialog
@@ -156,12 +150,17 @@ class MainWindow(QMainWindow):
                     self, "Locate Video", "",
                     "Video Files (*.mp4 *.mov *.avi *.mkv *.m4v);;All Files (*)"
                 )
-                if new_path:
-                    project.video_path = new_path
-                else:
+                if not new_path:
                     return  # User cancelled
+                project.video_path = new_path
             else:
                 return  # User declined to locate
+        from videotagger.core.tagging_engine import TaggingEngine
+        self._project = project
+        self._project_path = path
+        self._tagging_engine = TaggingEngine()
+        self._save_act.setEnabled(True)
+        self.setWindowTitle(f"VideoTagger — {project.video_path}")
         self.player.load(project.video_path)
         self.timeline.set_project(project)
         self.tag_panel.refresh(project)
@@ -281,8 +280,9 @@ class MainWindow(QMainWindow):
         from videotagger.core.playlist_builder import PlaylistBuilder
         clips = PlaylistBuilder(self._project).get_clips(playlist_id)
         pl = next(p for p in self._project.playlists if p.id == playlist_id)
+        category_map = {cat.id: cat.name for cat in self._project.categories}
         self._presentation = PresentationWindow(
-            self._project.video_path, clips, pl.name, self
+            self._project.video_path, clips, pl.name, category_map, self
         )
         self._presentation.showFullScreen()
 
