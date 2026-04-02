@@ -44,3 +44,11 @@ def test_clips_panel_creates(qtbot):
     w.show()
     assert w.isVisible()
     assert w._tabs.count() == 2
+
+
+def test_presentation_window_creates(qtbot):
+    from videotagger.ui.presentation_window import PresentationWindow
+    w = PresentationWindow("video.mp4", [], "Test Playlist")
+    qtbot.addWidget(w)
+    w.show()
+    assert w.isVisible()
