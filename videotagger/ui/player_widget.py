@@ -11,7 +11,10 @@ class PlayerWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._instance = vlc.Instance("--no-xlib")
+        args = ["--no-plugins-cache"]
+        if sys.platform == "linux":
+            args.append("--no-xlib")
+        self._instance = vlc.Instance(*args)
         self._player = self._instance.media_player_new()
         self._duration = 0.0
         self._setup_ui()

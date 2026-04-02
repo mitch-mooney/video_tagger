@@ -38,7 +38,7 @@ a = Analysis(
     datas=[
         ('videotagger/resources', 'videotagger/resources'),
     ] + vlc_datas,
-    hiddenimports=['vlc', 'PyQt6.QtCore', 'PyQt6.QtWidgets', 'PyQt6.QtGui'],
+    hiddenimports=['vlc', 'pkgutil', 'PyQt6.QtCore', 'PyQt6.QtWidgets', 'PyQt6.QtGui'],
     hookspath=[],
     noarchive=False,
 )

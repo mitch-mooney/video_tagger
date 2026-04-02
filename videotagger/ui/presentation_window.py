@@ -29,7 +29,9 @@ class PresentationWindow(QWidget):
         """Lazily initialise VLC — called on first show so the window handle exists."""
         if self._instance is not None:
             return
-        args = [] if sys.platform != "linux" else ["--no-xlib"]
+        args = ["--no-plugins-cache"]
+        if sys.platform == "linux":
+            args.append("--no-xlib")
         self._instance = vlc.Instance(*args)
         self._player = self._instance.media_player_new()
 
