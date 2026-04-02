@@ -29,7 +29,7 @@ class TemplateManager:
     @classmethod
     def list_builtin(cls) -> List[str]:
         d = cls._builtin_dir()
-        return [Path(f).stem for f in os.listdir(d) if f.endswith(".json")]
+        return sorted(Path(f).stem for f in os.listdir(d) if f.endswith(".json"))
 
     @classmethod
     def load_builtin(cls, name: str) -> List[Category]:
@@ -54,4 +54,4 @@ class TemplateManager:
     @classmethod
     def list_user(cls) -> List[str]:
         d = cls._user_dir()
-        return [Path(f).stem for f in os.listdir(d) if f.endswith(".json")]
+        return sorted(Path(f).stem for f in os.listdir(d) if f.endswith(".json"))
