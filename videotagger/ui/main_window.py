@@ -13,8 +13,11 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
         self._project: Project | None = None
         self._project_path: str | None = None
+        self._signals_wired = False
+        self._dirty = False
         self._setup_ui()
         self._setup_menu()
+        self._setup_shortcuts()
 
     def _setup_ui(self):
         from videotagger.ui.player_widget import PlayerWidget
@@ -121,6 +124,7 @@ class MainWindow(QMainWindow):
                 path += ".vtp"
             self._project_path = path
         ProjectManager.save(self._project, self._project_path)
+        self._dirty = False
         self.statusBar().showMessage(f"Saved: {self._project_path}", 3000)
 
     def _open_tag_manager(self):
@@ -142,10 +146,12 @@ class MainWindow(QMainWindow):
         self.timeline.set_project(project)
         self.tag_panel.refresh(project)
         self.clips_panel.refresh(project)
-        self._setup_shortcuts()
         self._wire_signals()
 
     def _wire_signals(self):
+        if self._signals_wired:
+            return
+        self._signals_wired = True
         self.player.position_changed.connect(self.timeline.set_position)
         self.player.duration_changed.connect(self.timeline.set_duration)
         self.timeline.seek_requested.connect(self.player.seek)
@@ -200,6 +206,7 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             clip = dlg.clip()
             self._project.clips.append(clip)
+            self._dirty = True
             self.timeline.set_project(self._project)
             self.clips_panel.refresh(self._project)
             self.statusBar().showMessage(
@@ -214,6 +221,7 @@ class MainWindow(QMainWindow):
     def _undo_last_clip(self):
         if self._project and self._project.clips:
             removed = self._project.clips.pop()
+            self._dirty = True
             self.timeline.set_project(self._project)
             self.clips_panel.refresh(self._project)
             self.statusBar().showMessage(f"Undo: removed clip '{removed.label}'", 3000)
@@ -263,7 +271,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._save_settings()
-        if self._project and not self._project_path:
+        if self._project and self._dirty:
             from PyQt6.QtWidgets import QMessageBox
             reply = QMessageBox.question(
                 self, "Unsaved Changes",

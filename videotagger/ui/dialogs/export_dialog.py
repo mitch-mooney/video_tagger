@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QCheckBox, QDialogButtonBox, QFileDialog, QMessageBox
+    QCheckBox, QDialogButtonBox, QFileDialog, QMessageBox, QProgressDialog
 )
 from PyQt6.QtCore import Qt
 from videotagger.models.project import Project
@@ -75,18 +75,25 @@ class ExportDialog(QDialog):
         if not do_mp4 and not do_edl:
             QMessageBox.warning(self, "Required", "Select at least one export format.")
             return
+        progress = QProgressDialog("Exporting clips...", None, 0, len(self._clips), self)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
         errors = []
-        if do_mp4:
-            from videotagger.export.ffmpeg_exporter import export_playlist_clips
-            try:
-                export_playlist_clips(self._clips, self._project, folder)
-            except RuntimeError as e:
-                errors.append(str(e))
-        if do_edl:
-            from videotagger.export.edl_writer import write_edl
-            pl = next(p for p in self._project.playlists if p.id == self._playlist_id)
-            edl_path = os.path.join(folder, f"{pl.name}.edl")
-            write_edl(pl.name, self._clips, self._project, edl_path)
+        try:
+            if do_mp4:
+                from videotagger.export.ffmpeg_exporter import export_playlist_clips
+                try:
+                    export_playlist_clips(self._clips, self._project, folder)
+                except RuntimeError as e:
+                    errors.append(str(e))
+            if do_edl:
+                from videotagger.export.edl_writer import write_edl
+                pl = next(p for p in self._project.playlists if p.id == self._playlist_id)
+                edl_path = os.path.join(folder, f"{pl.name}.edl")
+                write_edl(pl.name, self._clips, self._project, edl_path)
+        finally:
+            progress.close()
         if errors:
             QMessageBox.critical(self, "Export errors", "\n".join(errors))
         else:
