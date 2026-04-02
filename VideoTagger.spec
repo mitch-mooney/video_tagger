@@ -2,15 +2,32 @@
 import sys
 from pathlib import Path
 
-try:
-    import vlc
-    vlc_dir = Path(vlc.__file__).parent
+def _find_vlc_dir():
+    """Locate VLC installation: check python-vlc's directory first, then standard install paths."""
+    import os
+    try:
+        import vlc
+        candidate = Path(vlc.__file__).parent
+        if (candidate / 'libvlc.dll').exists():
+            return candidate
+    except Exception:
+        pass
+    for p in [
+        Path(os.environ.get('PROGRAMFILES', 'C:/Program Files')) / 'VideoLAN' / 'VLC',
+        Path(os.environ.get('PROGRAMFILES(X86)', 'C:/Program Files (x86)')) / 'VideoLAN' / 'VLC',
+    ]:
+        if (p / 'libvlc.dll').exists():
+            return p
+    return None
+
+vlc_dir = _find_vlc_dir()
+if vlc_dir:
     vlc_binaries = [
         (str(vlc_dir / 'libvlc.dll'), '.'),
         (str(vlc_dir / 'libvlccore.dll'), '.'),
     ]
     vlc_datas = [(str(vlc_dir / 'plugins'), 'plugins')]
-except Exception:
+else:
     vlc_binaries = []
     vlc_datas = []
 
