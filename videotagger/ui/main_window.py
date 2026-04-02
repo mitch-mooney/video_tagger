@@ -18,6 +18,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_shortcuts()
+        self._restore_settings()
 
     def _setup_ui(self):
         from videotagger.ui.player_widget import PlayerWidget
@@ -142,6 +143,25 @@ class MainWindow(QMainWindow):
         self._tagging_engine = TaggingEngine()
         self._save_act.setEnabled(True)
         self.setWindowTitle(f"VideoTagger — {project.video_path}")
+        import os
+        if not os.path.exists(project.video_path):
+            from PyQt6.QtWidgets import QMessageBox, QFileDialog
+            reply = QMessageBox.warning(
+                self, "Video Not Found",
+                f"Video file not found:\n{project.video_path}\n\nLocate it?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                new_path, _ = QFileDialog.getOpenFileName(
+                    self, "Locate Video", "",
+                    "Video Files (*.mp4 *.mov *.avi *.mkv *.m4v);;All Files (*)"
+                )
+                if new_path:
+                    project.video_path = new_path
+                else:
+                    return  # User cancelled
+            else:
+                return  # User declined to locate
         self.player.load(project.video_path)
         self.timeline.set_project(project)
         self.tag_panel.refresh(project)
@@ -297,10 +317,7 @@ class MainWindow(QMainWindow):
         self._recent_files = s.get("recent_files", [])
 
     def _save_settings(self):
-        try:
-            from videotagger.data.settings_manager import SettingsManager
-        except ImportError:
-            return  # SettingsManager not yet implemented (Task 20)
+        from videotagger.data.settings_manager import SettingsManager
         import base64
         SettingsManager.save({
             "geometry": base64.b64encode(bytes(self.saveGeometry())).decode(),
