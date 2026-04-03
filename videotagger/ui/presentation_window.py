@@ -1,4 +1,5 @@
 # videotagger/ui/presentation_window.py
+from __future__ import annotations
 import sys
 import vlc
 from typing import List

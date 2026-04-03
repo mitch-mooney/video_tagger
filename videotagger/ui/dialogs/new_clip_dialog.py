@@ -1,4 +1,5 @@
 # videotagger/ui/dialogs/new_clip_dialog.py
+from __future__ import annotations
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QComboBox, QLineEdit, QDoubleSpinBox, QDialogButtonBox
 )

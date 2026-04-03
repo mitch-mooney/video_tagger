@@ -1,4 +1,5 @@
 # videotagger/ui/clips_panel.py
+from __future__ import annotations
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTabWidget, QTableWidget, QTableWidgetItem,
     QListWidget, QListWidgetItem, QHeaderView, QAbstractItemView, QMenu
