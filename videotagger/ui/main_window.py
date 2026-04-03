@@ -1,10 +1,11 @@
 # videotagger/ui/main_window.py
 from __future__ import annotations
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QSplitter, QVBoxLayout, QStatusBar
+    QMainWindow, QWidget, QSplitter, QVBoxLayout, QHBoxLayout,
+    QStatusBar, QLabel
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QIcon
 from videotagger.models.project import Project
 
 class MainWindow(QMainWindow):
@@ -16,10 +17,31 @@ class MainWindow(QMainWindow):
         self._project_path: str | None = None
         self._signals_wired = False
         self._dirty = False
+        self._apply_style()
         self._setup_ui()
         self._setup_menu()
         self._setup_shortcuts()
         self._restore_settings()
+
+    def _apply_style(self):
+        from videotagger.ui.style import APP_STYLESHEET
+        self.setStyleSheet(APP_STYLESHEET)
+        logo_path = self._resource_path("logo.png")
+        if logo_path:
+            self.setWindowIcon(QIcon(logo_path))
+
+    @staticmethod
+    def _resource_path(filename: str) -> str | None:
+        """Return absolute path to a bundled resource, works frozen and unfrozen."""
+        import sys, os
+        if getattr(sys, "frozen", False):
+            base = sys._MEIPASS
+        else:
+            base = os.path.join(os.path.dirname(__file__), "..", "resources")
+        path = os.path.normpath(os.path.join(base, "videotagger", "resources", filename)) \
+            if getattr(sys, "frozen", False) else \
+            os.path.normpath(os.path.join(base, filename))
+        return path if os.path.exists(path) else None
 
     def _setup_ui(self):
         from videotagger.ui.player_widget import PlayerWidget
@@ -30,11 +52,53 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Logo header strip ──────────────────────────────────────────
+        header = QWidget()
+        header.setFixedHeight(48)
+        header.setStyleSheet(
+            "background: #090d12; border-bottom: 1px solid #1e2a38;"
+        )
+        header_row = QHBoxLayout(header)
+        header_row.setContentsMargins(10, 0, 16, 0)
+        header_row.setSpacing(10)
+
+        logo_path = self._resource_path("logo.png")
+        if logo_path:
+            logo_lbl = QLabel()
+            pix = QPixmap(logo_path).scaledToHeight(
+                36, Qt.TransformationMode.SmoothTransformation
+            )
+            logo_lbl.setPixmap(pix)
+            logo_lbl.setStyleSheet("background: transparent;")
+            header_row.addWidget(logo_lbl)
+
+        self._title_label = QLabel("VideoTagger")
+        self._title_label.setStyleSheet(
+            "background: transparent; color: #dde3ea;"
+            "font-size: 13pt; font-weight: 700; letter-spacing: 1px;"
+        )
+        header_row.addWidget(self._title_label)
+        header_row.addStretch()
+
+        self._file_label = QLabel("")
+        self._file_label.setStyleSheet(
+            "background: transparent; color: #7d8fa3; font-size: 8pt;"
+        )
+        header_row.addWidget(self._file_label)
+        layout.addWidget(header)
+
+        # ── Main content ───────────────────────────────────────────────
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(4, 4, 4, 4)
+        content_layout.setSpacing(4)
+        layout.addWidget(content, stretch=1)
 
         self._vsplit = QSplitter(Qt.Orientation.Vertical)
-        layout.addWidget(self._vsplit)
+        content_layout.addWidget(self._vsplit)
 
         top_widget = QWidget()
         top_layout = QVBoxLayout(top_widget)
@@ -161,7 +225,8 @@ class MainWindow(QMainWindow):
         self._project_path = path
         self._tagging_engine = TaggingEngine()
         self._save_act.setEnabled(True)
-        self.setWindowTitle(f"VideoTagger — {project.video_path}")
+        self.setWindowTitle("VideoTagger")
+        self._file_label.setText(os.path.basename(project.video_path))
         self.player.load(project.video_path)
         self.timeline.set_project(project)
         self.tag_panel.refresh(project)

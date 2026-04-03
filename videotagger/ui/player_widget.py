@@ -32,16 +32,28 @@ class PlayerWidget(QWidget):
         self._frame.setMinimumHeight(200)
         layout.addWidget(self._frame, stretch=1)
 
-        ctrl = QHBoxLayout()
-        ctrl.setContentsMargins(4, 2, 4, 2)
+        ctrl_widget = QWidget()
+        ctrl_widget.setStyleSheet("background: #090d12; border-top: 1px solid #1e2a38;")
+        ctrl_widget.setFixedHeight(36)
+        ctrl = QHBoxLayout(ctrl_widget)
+        ctrl.setContentsMargins(8, 0, 8, 0)
+        ctrl.setSpacing(8)
 
         self._play_btn = QPushButton("▶")
-        self._play_btn.setFixedWidth(36)
+        self._play_btn.setFixedSize(32, 26)
+        self._play_btn.setStyleSheet(
+            "QPushButton { background: #00b09b; color: #000; border: none;"
+            " border-radius: 4px; font-size: 11pt; font-weight: bold; }"
+            "QPushButton:hover { background: #00d4b8; }"
+            "QPushButton:pressed { background: #008f7e; }"
+        )
         self._play_btn.clicked.connect(self.toggle_play)
         ctrl.addWidget(self._play_btn)
 
+        mono = QFont("Consolas", 9)
         self._pos_label = QLabel("00:00:00")
-        self._pos_label.setFont(QFont("Courier", 9))
+        self._pos_label.setFont(mono)
+        self._pos_label.setStyleSheet("color: #00b09b; background: transparent; min-width: 58px;")
         ctrl.addWidget(self._pos_label)
 
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
@@ -50,14 +62,19 @@ class PlayerWidget(QWidget):
         ctrl.addWidget(self._seek_slider, stretch=1)
 
         self._dur_label = QLabel("00:00:00")
-        self._dur_label.setFont(QFont("Courier", 9))
+        self._dur_label.setFont(mono)
+        self._dur_label.setStyleSheet("color: #7d8fa3; background: transparent; min-width: 58px;")
         ctrl.addWidget(self._dur_label)
 
-        self._speed_label = QLabel("1.0x")
-        self._speed_label.setFixedWidth(40)
+        self._speed_label = QLabel("1.0×")
+        self._speed_label.setFixedWidth(44)
+        self._speed_label.setStyleSheet(
+            "color: #7d8fa3; background: #13191f; border: 1px solid #1e2a38;"
+            " border-radius: 3px; padding: 1px 4px; font-size: 8pt;"
+        )
         ctrl.addWidget(self._speed_label)
 
-        layout.addLayout(ctrl)
+        layout.addWidget(ctrl_widget)
 
     def load(self, path: str) -> None:
         media = self._instance.media_new(path)
@@ -102,7 +119,7 @@ class PlayerWidget(QWidget):
     def set_rate(self, rate: float) -> None:
         rate = max(0.25, min(4.0, rate))
         self._player.set_rate(rate)
-        self._speed_label.setText(f"{rate:.2g}x")
+        self._speed_label.setText(f"{rate:.2g}×")
 
     def get_rate(self) -> float:
         return self._player.get_rate()

@@ -25,6 +25,8 @@ class ClipsPanel(QWidget):
         self._playlists_list = self._make_playlists_list()
         self._tabs.addTab(self._clips_table, "Clips")
         self._tabs.addTab(self._playlists_list, "Playlists")
+        from videotagger.ui.help_panel import HelpPanel
+        self._tabs.addTab(HelpPanel(), "Help")
 
     def _make_clips_table(self) -> QTableWidget:
         t = QTableWidget(0, 4)
