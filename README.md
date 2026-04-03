@@ -21,12 +21,9 @@ A Windows desktop application for tagging and reviewing sporting footage. Open a
 ## Quick Start (pre-built .exe)
 
 1. Download `VideoTagger.exe` from the `dist/` folder (or the latest release).
-2. **Download ffmpeg** and place `ffmpeg.exe` in the same folder as `VideoTagger.exe`:
-   - Go to **https://www.gyan.dev/ffmpeg/builds/**
-   - Download **`ffmpeg-release-essentials.zip`**
-   - Extract and copy `bin/ffmpeg.exe` alongside `VideoTagger.exe`
-   - ffmpeg is only required for clip export — the app works without it otherwise
-3. Double-click `VideoTagger.exe` — no installation required.
+2. Double-click `VideoTagger.exe` — no installation required.
+
+ffmpeg is bundled inside the exe and requires no separate download.
 
 ---
 
@@ -115,13 +112,21 @@ python -m pytest tests/
 
 ### Build .exe
 
+Before building, place `ffmpeg.exe` in the project root (it will be embedded in the output exe):
+
+```
+# Download from https://www.gyan.dev/ffmpeg/builds/
+# Extract ffmpeg.exe from ffmpeg-release-essentials.zip → bin/ffmpeg.exe
+# Place it at: VideoAnalysis/ffmpeg.exe
+```
+
+Then run:
+
 ```
 python build.py
 ```
 
-Output: `dist/VideoTagger.exe`
-
-> **Note:** Copy `ffmpeg.exe` into `dist/` alongside `VideoTagger.exe` before distributing.
+Output: `dist/VideoTagger.exe` — fully self-contained, no separate ffmpeg needed.
 
 ---
 
