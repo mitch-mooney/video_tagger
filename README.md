@@ -21,7 +21,11 @@ A Windows desktop application for tagging and reviewing sporting footage. Open a
 ## Quick Start (pre-built .exe)
 
 1. Download `VideoTagger.exe` from the `dist/` folder (or the latest release).
-2. Place `ffmpeg.exe` in the same folder as `VideoTagger.exe` (required for clip export).
+2. **Download ffmpeg** and place `ffmpeg.exe` in the same folder as `VideoTagger.exe`:
+   - Go to **https://www.gyan.dev/ffmpeg/builds/**
+   - Download **`ffmpeg-release-essentials.zip`**
+   - Extract and copy `bin/ffmpeg.exe` alongside `VideoTagger.exe`
+   - ffmpeg is only required for clip export — the app works without it otherwise
 3. Double-click `VideoTagger.exe` — no installation required.
 
 ---
