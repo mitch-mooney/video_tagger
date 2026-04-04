@@ -1,6 +1,61 @@
 # VideoTagger
 
-A Windows desktop application for tagging and reviewing sporting footage. Open a video, mark clips with keyboard shortcuts, build playlists, and present or export them.
+A desktop application for tagging and reviewing sporting footage. Open a video, mark clips with keyboard shortcuts, build playlists, and present or export them.
+
+---
+
+## Download
+
+Go to the [**Releases page**](https://github.com/mitch-mooney/video_tagger/releases) and download the latest version for your platform:
+
+| Platform | File | Notes |
+|----------|------|-------|
+| Windows | `VideoTagger.exe` | Double-click to run — no install needed |
+| macOS | `VideoTagger.dmg` | See macOS setup instructions below |
+
+Both files are fully self-contained — ffmpeg is bundled, no separate download required.
+
+---
+
+## Windows — Quick Start
+
+1. Download `VideoTagger.exe` from the [latest release](https://github.com/mitch-mooney/video_tagger/releases/latest).
+2. Double-click `VideoTagger.exe` — no installation required.
+
+---
+
+## macOS — Quick Start
+
+### 1. Install VideoTagger
+
+1. Download `VideoTagger.dmg` from the [latest release](https://github.com/mitch-mooney/video_tagger/releases/latest).
+2. Open the `.dmg` file and drag **VideoTagger** into your **Applications** folder.
+
+### 2. Bypass the unsigned app warning
+
+Because VideoTagger is not signed with a paid Apple Developer certificate, macOS will block it on first launch. There are two ways to get around this:
+
+**Option A — Right-click method (easiest):**
+1. Open **Finder** and go to **Applications**.
+2. **Right-click** (or Control-click) `VideoTagger`.
+3. Choose **Open** from the menu.
+4. Click **Open** in the dialog that appears.
+
+You only need to do this once — macOS remembers the exception.
+
+**Option B — Terminal (one command):**
+
+Open Terminal and run:
+```bash
+xattr -rd com.apple.quarantine /Applications/VideoTagger.app
+```
+Then double-click normally to launch.
+
+### 3. Install VLC (required for video playback)
+
+VideoTagger uses VLC for video playback on macOS. Download and install it from:
+
+> **https://www.videolan.org/vlc/**
 
 ---
 
@@ -15,15 +70,6 @@ A Windows desktop application for tagging and reviewing sporting footage. Open a
 - **Presentation mode** — full-screen playlist playback with HUD overlay, auto-advance between clips
 - **Export** — cut clips to individual `.mp4` files and/or generate a CMX 3600 `.edl` reference file
 - **Project files** — save/load `.vtp` project files (plain JSON) for easy team sharing
-
----
-
-## Quick Start (pre-built .exe)
-
-1. Download `VideoTagger.exe` from the `dist/` folder (or the latest release).
-2. Double-click `VideoTagger.exe` — no installation required.
-
-ffmpeg is bundled inside the exe and requires no separate download.
 
 ---
 
@@ -84,13 +130,26 @@ Projects are saved as `.vtp` files (plain JSON). Share them with teammates — t
 
 ---
 
+## Releasing a New Version
+
+Push a version tag and GitHub Actions builds both platforms automatically:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The workflow builds `VideoTagger.exe` (Windows) and `VideoTagger.dmg` (macOS) in parallel and attaches both to a GitHub Release. No manual building or file distribution needed.
+
+---
+
 ## Building from Source
 
 ### Prerequisites
 
-- Python 3.11+
-- [VLC media player](https://www.videolan.org/) installed (provides `libvlc.dll`)
-- `ffmpeg.exe` on PATH or in the project root
+- Python 3.9+
+- [VLC media player](https://www.videolan.org/) installed
+- `ffmpeg` / `ffmpeg.exe` in the project root (embedded in the output binary)
 
 ### Install dependencies
 
@@ -110,29 +169,35 @@ python main.py
 python -m pytest tests/
 ```
 
-### Build .exe
+### Build (Windows)
 
-Before building, place `ffmpeg.exe` in the project root (it will be embedded in the output exe):
-
-```
-# Download from https://www.gyan.dev/ffmpeg/builds/
-# Extract ffmpeg.exe from ffmpeg-release-essentials.zip → bin/ffmpeg.exe
-# Place it at: VideoAnalysis/ffmpeg.exe
-```
-
-Then run:
+Download `ffmpeg.exe` from [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/) → `ffmpeg-release-essentials.zip` → extract `bin/ffmpeg.exe` into the project root, then:
 
 ```
 python build.py
 ```
 
-Output: `dist/VideoTagger.exe` — fully self-contained, no separate ffmpeg needed.
+Output: `dist/VideoTagger.exe`
+
+### Build (macOS)
+
+```bash
+brew install --cask vlc
+brew install ffmpeg create-dmg
+cp $(which ffmpeg) ./ffmpeg
+python build.py
+```
+
+Output: `dist/VideoTagger.dmg`
 
 ---
 
 ## Tag Templates
 
-Templates are JSON files listing categories and labels. The built-in **AFL** template covers common football actions. Custom templates can be created and saved via **Tags → Manage Tags → Save as Template** and are stored in `%APPDATA%\VideoTagger\templates\`.
+Templates are JSON files listing categories and labels. The built-in **AFL** template covers common football actions. Custom templates can be created and saved via **Tags → Manage Tags → Save as Template**.
+
+- **Windows:** `%APPDATA%\VideoTagger\templates\`
+- **macOS:** `~/Library/Application Support/VideoTagger/templates/`
 
 ---
 
