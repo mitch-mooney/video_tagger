@@ -6,13 +6,14 @@ from videotagger.models.project import Clip, Project
 
 def _ffmpeg_path() -> str:
     import sys, shutil
+    name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
     # 1. Extracted by PyInstaller into the temp _MEIPASS directory
     if getattr(sys, "frozen", False):
-        meipass = Path(sys._MEIPASS) / "ffmpeg.exe"
+        meipass = Path(sys._MEIPASS) / name
         if meipass.exists():
             return str(meipass)
     # 2. Bundled inside the package resources (dev mode)
-    bundled = Path(__file__).parent.parent / "resources" / "ffmpeg.exe"
+    bundled = Path(__file__).parent.parent / "resources" / name
     if bundled.exists():
         return str(bundled)
     # 3. On PATH
