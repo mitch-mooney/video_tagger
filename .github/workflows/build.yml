@@ -70,7 +70,7 @@ jobs:
           cp $(which ffmpeg) ./ffmpeg
 
       - name: Install Python dependencies
-        run: pip install PyQt6 python-vlc pyinstaller
+        run: pip install PyQt6 python-vlc pyinstaller Pillow
 
       - name: Build .app
         run: python -m PyInstaller --clean VideoTagger.spec
