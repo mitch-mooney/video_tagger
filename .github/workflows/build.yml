@@ -120,4 +120,35 @@ jobs:
           files: |
             artifacts/windows/VideoTagger.exe
             artifacts/macos/VideoTagger.dmg
-          generate_release_notes: true
+          body: |
+            ## Installation
+
+            ### Windows
+            1. Download **VideoTagger.exe** below.
+            2. Double-click to run — no installation required.
+            > ffmpeg is bundled inside the exe, nothing else needed.
+
+            ---
+
+            ### macOS
+            1. Download **VideoTagger.dmg** below.
+            2. Open the `.dmg` and drag **VideoTagger** into your **Applications** folder.
+            3. Install [VLC media player](https://www.videolan.org/vlc/) if you haven't already (required for video playback).
+
+            **First launch — bypass the unsigned app warning:**
+
+            macOS will block the app because it is not signed with a paid Apple Developer certificate.
+            To open it anyway, choose one of these methods:
+
+            **Option A (easiest):** In Finder → Applications, **right-click** VideoTagger → **Open** → click **Open** in the dialog. You only need to do this once.
+
+            **Option B (terminal):**
+            ```bash
+            xattr -rd com.apple.quarantine /Applications/VideoTagger.app
+            ```
+            Then double-click normally to launch.
+
+            ---
+
+            ### Sharing projects with teammates
+            Save your project as a `.vtp` file (**Ctrl+S**) and share it — teammates need the same video file at the same path, or VideoTagger will prompt them to locate it.
