@@ -4,9 +4,66 @@ import sys
 import vlc
 from typing import List
 from PyQt6.QtWidgets import QWidget, QLabel, QPushButton
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QKeyEvent, QFont
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint
+from PyQt6.QtGui import QKeyEvent, QFont, QPainter, QPen, QColor, QPixmap
 from videotagger.models.project import Clip
+
+
+class DrawingOverlay(QWidget):
+    """Transparent overlay that captures freehand pen strokes."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self._canvas: QPixmap | None = None
+        self._last_pos: QPoint | None = None
+        self._pen_color = QColor("#ff4444")
+        self._pen_width = 4
+
+    def resizeEvent(self, event):
+        # Preserve existing strokes scaled to new size (simple: recreate blank)
+        new_canvas = QPixmap(self.size())
+        new_canvas.fill(Qt.GlobalColor.transparent)
+        if self._canvas:
+            painter = QPainter(new_canvas)
+            painter.drawPixmap(0, 0, self._canvas)
+            painter.end()
+        self._canvas = new_canvas
+        super().resizeEvent(event)
+
+    def clear(self):
+        if self._canvas:
+            self._canvas.fill(Qt.GlobalColor.transparent)
+        self.update()
+
+    def paintEvent(self, event):
+        if self._canvas:
+            painter = QPainter(self)
+            painter.drawPixmap(0, 0, self._canvas)
+            painter.end()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._last_pos = event.position().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.MouseButton.LeftButton and self._last_pos is not None:
+            if self._canvas is None:
+                self._canvas = QPixmap(self.size())
+                self._canvas.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(self._canvas)
+            pen = QPen(self._pen_color, self._pen_width, Qt.PenStyle.SolidLine,
+                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.drawLine(self._last_pos, event.position().toPoint())
+            painter.end()
+            self._last_pos = event.position().toPoint()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        self._last_pos = None
 
 class PresentationWindow(QWidget):
     closed = pyqtSignal()
@@ -48,6 +105,11 @@ class PresentationWindow(QWidget):
     def _setup_ui(self):
         # No layout manager — child widgets use absolute positioning for HUD overlay
 
+        # Drawing overlay (below HUD so HUD buttons remain clickable)
+        self._drawing = DrawingOverlay(self)
+        self._drawing.hide()
+        self._drawing_mode = False
+
         # HUD overlay
         self._hud = QWidget(self)
         self._hud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
@@ -62,9 +124,24 @@ class PresentationWindow(QWidget):
         self._clip_label.setStyleSheet(hud_style)
         self._clip_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
+        self._notes_label = QLabel("", self._hud)
+        self._notes_label.setStyleSheet(
+            "color: #cccccc; background: rgba(0,0,0,140); padding: 3px 8px; border-radius: 3px;"
+        )
+        self._notes_label.setFont(QFont("Arial", 11))
+        self._notes_label.setWordWrap(True)
+        self._notes_label.setMaximumWidth(600)
+
         self._counter_label = QLabel("", self._hud)
         self._counter_label.setStyleSheet(hud_style)
         self._counter_label.setFont(QFont("Arial", 12))
+
+        self._draw_label = QLabel("✏ DRAW MODE  [C] clear  [D] exit", self._hud)
+        self._draw_label.setStyleSheet(
+            "color: #ff4444; background: rgba(0,0,0,160); padding: 3px 8px; border-radius: 3px;"
+        )
+        self._draw_label.setFont(QFont("Arial", 11))
+        self._draw_label.hide()
 
         btn_style = "color: white; background: rgba(0,0,0,160); border: none; font-size: 20px; padding: 6px 12px; border-radius: 3px;"
         self._prev_btn = QPushButton("\u23ee", self._hud)
@@ -101,6 +178,7 @@ class PresentationWindow(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._drawing.resize(self.size())
         self._hud.resize(self.size())
         self._reposition_hud()
 
@@ -110,15 +188,22 @@ class PresentationWindow(QWidget):
         self._name_label.move(12, 12)
 
         self._clip_label.adjustSize()
-        self._clip_label.move(12, h - 50)
+        self._clip_label.move(12, h - 72)
+
+        self._notes_label.adjustSize()
+        self._notes_label.move(12, h - 50)
+        self._notes_label.setVisible(bool(self._notes_label.text()))
 
         self._counter_label.adjustSize()
-        self._counter_label.move(w - self._counter_label.width() - 12, h - 50)
+        self._counter_label.move(w - self._counter_label.width() - 12, h - 72)
 
         cx = (w - 160) // 2
         self._prev_btn.move(cx, h - 52)
         self._play_btn.move(cx + 55, h - 52)
         self._next_btn.move(cx + 110, h - 52)
+
+        self._draw_label.adjustSize()
+        self._draw_label.move((w - self._draw_label.width()) // 2, 12)
 
     def _play_clip(self, index: int):
         if self._player is None or not self._clips or index < 0 or index >= len(self._clips):
@@ -153,6 +238,7 @@ class PresentationWindow(QWidget):
         cat_name = self._category_map.get(clip.category_id, "")
         label_text = f"{cat_name} — {clip.label}" if cat_name else clip.label
         self._clip_label.setText(label_text)
+        self._notes_label.setText(clip.notes.strip() if clip.notes else "")
         self._counter_label.setText(f"{self._current_index + 1} / {len(self._clips)}")
         self._reposition_hud()
 
@@ -181,8 +267,21 @@ class PresentationWindow(QWidget):
         self._hud.setVisible(True)
         self._hud_timer.start()
 
+    def _toggle_drawing(self):
+        self._drawing_mode = not self._drawing_mode
+        self._drawing.setVisible(self._drawing_mode)
+        self._draw_label.setVisible(self._drawing_mode)
+        # In draw mode, HUD buttons stay accessible; mouse events go to drawing overlay
+        if self._drawing_mode:
+            self._drawing.raise_()
+            self._hud.raise_()
+            self._show_hud()
+        else:
+            self._hud_timer.start()
+
     def mouseMoveEvent(self, event):
-        self._show_hud()
+        if not self._drawing_mode:
+            self._show_hud()
 
     def keyPressEvent(self, event: QKeyEvent):
         key = event.key()
@@ -193,11 +292,15 @@ class PresentationWindow(QWidget):
                 self._player.stop()
             self.closed.emit()
             self.close()
+        elif key == Qt.Key.Key_D:
+            self._toggle_drawing()
+        elif key == Qt.Key.Key_C and self._drawing_mode:
+            self._drawing.clear()
         elif key == Qt.Key.Key_Space:
             self._toggle_play()
-        elif key == Qt.Key.Key_Left:
+        elif key == Qt.Key.Key_Left and not self._drawing_mode:
             self._prev_clip()
-        elif key == Qt.Key.Key_Right:
+        elif key == Qt.Key.Key_Right and not self._drawing_mode:
             self._next_clip()
         else:
             super().keyPressEvent(event)

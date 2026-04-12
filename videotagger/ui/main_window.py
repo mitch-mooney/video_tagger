@@ -104,10 +104,13 @@ class MainWindow(QMainWindow):
         top_layout = QVBoxLayout(top_widget)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(2)
+        from videotagger.ui.shortcut_bar import ShortcutBar
         self.player = PlayerWidget()
         self.timeline = TimelineWidget()
         self.timeline.setFixedHeight(60)
+        self.shortcut_bar = ShortcutBar()
         top_layout.addWidget(self.player, stretch=1)
+        top_layout.addWidget(self.shortcut_bar)
         top_layout.addWidget(self.timeline)
         self._vsplit.addWidget(top_widget)
 
@@ -142,6 +145,11 @@ class MainWindow(QMainWindow):
         self._save_act.setEnabled(False)
         file_menu.addAction(self._save_act)
 
+        self._import_act = QAction("&Import Timestamps...", self)
+        self._import_act.triggered.connect(self._import_timestamps)
+        self._import_act.setEnabled(False)
+        file_menu.addAction(self._import_act)
+
         file_menu.addSeparator()
         quit_act = QAction("&Quit", self)
         quit_act.setShortcut(QKeySequence.StandardKey.Quit)
@@ -152,6 +160,11 @@ class MainWindow(QMainWindow):
         manage_act = QAction("&Manage Tags...", self)
         manage_act.triggered.connect(self._open_tag_manager)
         tags_menu.addAction(manage_act)
+
+        settings_menu = menubar.addMenu("&Settings")
+        color_act = QAction("Team &Color...", self)
+        color_act.triggered.connect(self._choose_team_color)
+        settings_menu.addAction(color_act)
 
     def _new_project(self):
         from videotagger.ui.dialogs.new_project_dialog import NewProjectDialog
@@ -225,6 +238,7 @@ class MainWindow(QMainWindow):
         self._project_path = path
         self._tagging_engine = TaggingEngine()
         self._save_act.setEnabled(True)
+        self._import_act.setEnabled(True)
         self.setWindowTitle("VideoTagger")
         self._file_label.setText(os.path.basename(project.video_path))
         self.player.load(project.video_path)
@@ -246,6 +260,7 @@ class MainWindow(QMainWindow):
         self.clips_panel.export_requested.connect(self._on_export_requested)
         self.clips_panel.present_requested.connect(self._on_present_requested)
         self.clips_panel.new_playlist_requested.connect(self._new_playlist)
+        self.clips_panel.filter_changed.connect(self.timeline.set_filter)
 
     def _setup_shortcuts(self):
         from PyQt6.QtGui import QShortcut
@@ -268,9 +283,11 @@ class MainWindow(QMainWindow):
 
     def _mark_in(self):
         if self._project and hasattr(self, '_tagging_engine'):
-            self._tagging_engine.press_in(self.player.get_position())
+            pos = self.player.get_position()
+            self._tagging_engine.press_in(pos)
+            self.shortcut_bar.set_marking(pos)
             self.statusBar().showMessage(
-                f"Mark IN set at {self.player.get_position():.2f}s — press O to mark end"
+                f"Mark IN set at {pos:.2f}s — press O to mark end"
             )
 
     def _mark_out(self):
@@ -297,10 +314,12 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"Clip added: {clip.label} ({start:.1f}s – {end:.1f}s)", 3000
             )
+        self.shortcut_bar.set_idle()
 
     def _cancel_mark(self):
         if hasattr(self, '_tagging_engine'):
             self._tagging_engine.cancel()
+            self.shortcut_bar.set_idle()
             self.statusBar().showMessage("Clip mark cancelled", 2000)
 
     def _undo_last_clip(self):
@@ -352,6 +371,19 @@ class MainWindow(QMainWindow):
         )
         self._presentation.showFullScreen()
 
+    def _import_timestamps(self):
+        if not self._project:
+            return
+        from videotagger.ui.dialogs.import_timestamps_dialog import ImportTimestampsDialog
+        dlg = ImportTimestampsDialog(self._project, self)
+        if dlg.exec():
+            clips = dlg.clips()
+            self._project.clips.extend(clips)
+            self._dirty = True
+            self.timeline.set_project(self._project)
+            self.clips_panel.refresh(self._project)
+            self.statusBar().showMessage(f"Imported {len(clips)} clip(s) from timestamps", 3000)
+
     def _toggle_presentation(self):
         pass  # F11 from main window — no-op unless a playlist is active
 
@@ -373,6 +405,19 @@ class MainWindow(QMainWindow):
                 return
         event.accept()
 
+    def _choose_team_color(self):
+        from PyQt6.QtWidgets import QColorDialog
+        from PyQt6.QtGui import QColor
+        current = getattr(self, "_accent_color", "#00b09b")
+        color = QColorDialog.getColor(QColor(current), self, "Choose Team Accent Color")
+        if color.isValid():
+            self._accent_color = color.name()
+            self._apply_accent(self._accent_color)
+
+    def _apply_accent(self, accent: str):
+        from videotagger.ui.style import build_stylesheet
+        self.setStyleSheet(build_stylesheet(accent))
+
     def _restore_settings(self):
         from videotagger.data.settings_manager import SettingsManager
         import base64
@@ -381,6 +426,9 @@ class MainWindow(QMainWindow):
             from PyQt6.QtCore import QByteArray
             self.restoreGeometry(QByteArray(base64.b64decode(s["geometry"])))
         self._recent_files = s.get("recent_files", [])
+        self._accent_color = s.get("accent_color", "#00b09b")
+        if self._accent_color != "#00b09b":
+            self._apply_accent(self._accent_color)
 
     def _save_settings(self):
         from videotagger.data.settings_manager import SettingsManager
@@ -388,4 +436,5 @@ class MainWindow(QMainWindow):
         SettingsManager.save({
             "geometry": base64.b64encode(bytes(self.saveGeometry())).decode(),
             "recent_files": getattr(self, "_recent_files", []),
+            "accent_color": getattr(self, "_accent_color", "#00b09b"),
         })

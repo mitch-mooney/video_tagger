@@ -2,9 +2,14 @@
 """
 Global dark-sports stylesheet.
 Palette drawn from the Cheap Stats logo: deep navy background, teal (#00b09b) accent.
+Call build_stylesheet(accent) to get a stylesheet with a custom accent color.
 """
 
-APP_STYLESHEET = """
+_DEFAULT_ACCENT = "#00b09b"
+_DEFAULT_DARK   = "#003d4f"
+_DEFAULT_LIGHT  = "#00d4b8"
+
+_TEMPLATE = """
 /* ── Base ──────────────────────────────────────────────── */
 QMainWindow, QWidget {
     background: #0d1117;
@@ -265,3 +270,26 @@ QProgressBar::chunk {
 QMessageBox { background: #0d1117; }
 QMessageBox QLabel { color: #dde3ea; }
 """
+
+
+def build_stylesheet(accent: str = _DEFAULT_ACCENT) -> str:
+    """Return the app stylesheet with accent replaced by the given hex color."""
+    from PyQt6.QtGui import QColor
+    c = QColor(accent)
+    r, g, b = c.red(), c.green(), c.blue()
+    dark_r, dark_g, dark_b = int(r * 0.3), int(g * 0.3), int(b * 0.3)
+    light_r = min(255, int(r * 1.2))
+    light_g = min(255, int(g * 1.2))
+    light_b = min(255, int(b * 1.2))
+    accent_dark  = f"#{dark_r:02x}{dark_g:02x}{dark_b:02x}"
+    accent_light = f"#{light_r:02x}{light_g:02x}{light_b:02x}"
+    return (
+        _TEMPLATE
+        .replace(_DEFAULT_LIGHT, accent_light)
+        .replace(_DEFAULT_DARK,  accent_dark)
+        .replace(_DEFAULT_ACCENT, accent)
+    )
+
+
+# Default stylesheet (used by _apply_style before settings are loaded)
+APP_STYLESHEET = build_stylesheet()

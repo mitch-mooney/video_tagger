@@ -1,8 +1,8 @@
 # videotagger/ui/clips_panel.py
 from __future__ import annotations
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QTabWidget, QTableWidget, QTableWidgetItem,
-    QListWidget, QListWidgetItem, QHeaderView, QAbstractItemView, QMenu
+    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QTableWidget, QTableWidgetItem,
+    QListWidget, QListWidgetItem, QHeaderView, QAbstractItemView, QMenu, QLineEdit, QLabel
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from videotagger.models.project import Project
@@ -13,12 +13,26 @@ class ClipsPanel(QWidget):
     export_requested = pyqtSignal(str)
     present_requested = pyqtSignal(str)
     new_playlist_requested = pyqtSignal()
+    filter_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._project: Project | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(4)
+
+        # Search bar
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(0, 0, 0, 0)
+        search_row.addWidget(QLabel("Search:"))
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Filter by label, category, or notes…")
+        self._search.setClearButtonEnabled(True)
+        self._search.textChanged.connect(self._on_filter_changed)
+        search_row.addWidget(self._search)
+        layout.addLayout(search_row)
+
         self._tabs = QTabWidget()
         layout.addWidget(self._tabs)
         self._clips_table = self._make_clips_table()
@@ -51,6 +65,25 @@ class ClipsPanel(QWidget):
         self._refresh_clips()
         self._refresh_playlists()
 
+    def _on_filter_changed(self, text: str):
+        self._apply_table_filter(text)
+        self.filter_changed.emit(text)
+
+    def _apply_table_filter(self, text: str):
+        q = text.lower().strip()
+        if not self._project:
+            return
+        cat_map = {c.id: c for c in self._project.categories}
+        for row in range(self._clips_table.rowCount()):
+            clip_id = self._clips_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            clip = next((c for c in self._project.clips if c.id == clip_id), None)
+            if not clip or not q:
+                self._clips_table.setRowHidden(row, False)
+                continue
+            cat = cat_map.get(clip.category_id)
+            haystack = " ".join([clip.label, clip.notes or "", cat.name if cat else ""]).lower()
+            self._clips_table.setRowHidden(row, q not in haystack)
+
     def _refresh_clips(self):
         if not self._project:
             return
@@ -66,6 +99,8 @@ class ClipsPanel(QWidget):
             self._clips_table.setItem(row, 1, QTableWidgetItem(clip.label))
             self._clips_table.setItem(row, 2, QTableWidgetItem(self._fmt(clip.start)))
             self._clips_table.setItem(row, 3, QTableWidgetItem(self._fmt(clip.end)))
+        # Re-apply current filter after repopulating
+        self._apply_table_filter(self._search.text())
 
     def _refresh_playlists(self):
         if not self._project:
