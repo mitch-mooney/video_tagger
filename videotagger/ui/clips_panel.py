@@ -43,9 +43,11 @@ class ClipsPanel(QWidget):
         self._tabs.addTab(HelpPanel(), "Help")
 
     def _make_clips_table(self) -> QTableWidget:
-        t = QTableWidget(0, 4)
-        t.setHorizontalHeaderLabels(["Category", "Label", "Start", "End"])
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        t = QTableWidget(0, 5)
+        t.setHorizontalHeaderLabels(["Category", "Label", "Start", "End", "Notes"])
+        t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        t.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        t.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         t.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -100,6 +102,7 @@ class ClipsPanel(QWidget):
             self._clips_table.setItem(row, 1, QTableWidgetItem(clip.label))
             self._clips_table.setItem(row, 2, QTableWidgetItem(self._fmt(clip.start)))
             self._clips_table.setItem(row, 3, QTableWidgetItem(self._fmt(clip.end)))
+            self._clips_table.setItem(row, 4, QTableWidgetItem(clip.notes or ""))
         # Re-apply current filter after repopulating
         self._apply_table_filter(self._search.text())
 
