@@ -1,69 +1,48 @@
 # videotagger/ui/presentation_window.py
 from __future__ import annotations
 import sys
-import math
 import vlc
-from enum import Enum, auto
 from typing import List
-from PyQt6.QtWidgets import QWidget, QLabel, QPushButton, QHBoxLayout
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint, QRect
-from PyQt6.QtGui import QKeyEvent, QFont, QPainter, QPen, QColor, QPixmap, QBrush
+from PyQt6.QtWidgets import QWidget, QLabel, QPushButton
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint
+from PyQt6.QtGui import QKeyEvent, QFont, QPainter, QPen, QColor, QPixmap
 from videotagger.models.project import Clip
 
-
-class DrawTool(Enum):
-    PEN    = auto()
-    ARROW  = auto()
-    RECT   = auto()
-    CIRCLE = auto()
-
-
-_TOOL_COLORS = ["#ff4444", "#ffcc00", "#44aaff", "#44ff88", "#ffffff"]
+_PEN_COLORS = ["#ff4444", "#ffcc00", "#44aaff", "#44ff88", "#ffffff"]
 
 
 class DrawingOverlay(QWidget):
-    """Transparent overlay supporting freehand pen, arrow, rectangle and circle tools."""
+    """Transparent freehand pen overlay. Never steals keyboard focus."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Never grab keyboard focus — all key events stay with PresentationWindow
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._canvas: QPixmap | None = None
-        self._tool = DrawTool.PEN
-        self._color_index = 0
-        self._pen_color = QColor(_TOOL_COLORS[0])
-        self._pen_width = 4
-        # For PEN
         self._last_pos: QPoint | None = None
-        # For shape tools — rubber-band preview
-        self._start_pos: QPoint | None = None
-        self._preview_pos: QPoint | None = None
+        self._color_index = 0
+        self._pen_color = QColor(_PEN_COLORS[0])
+        self._pen_width = 4
 
     # ── public API ────────────────────────────────────────────────────────
 
-    @property
-    def tool(self) -> DrawTool:
-        return self._tool
-
-    def set_tool(self, tool: DrawTool):
-        self._tool = tool
-        self._start_pos = None
-        self._preview_pos = None
-
     def cycle_color(self):
-        self._color_index = (self._color_index + 1) % len(_TOOL_COLORS)
-        self._pen_color = QColor(_TOOL_COLORS[self._color_index])
-
-    @property
-    def color(self) -> QColor:
+        self._color_index = (self._color_index + 1) % len(_PEN_COLORS)
+        self._pen_color = QColor(_PEN_COLORS[self._color_index])
         return self._pen_color
+
+    def thicker(self):
+        self._pen_width = min(20, self._pen_width + 2)
+
+    def thinner(self):
+        self._pen_width = max(2, self._pen_width - 2)
 
     def clear(self):
         if self._canvas:
             self._canvas.fill(Qt.GlobalColor.transparent)
-        self._start_pos = None
-        self._preview_pos = None
         self.update()
 
     # ── Qt events ─────────────────────────────────────────────────────────
@@ -72,175 +51,46 @@ class DrawingOverlay(QWidget):
         new_canvas = QPixmap(self.size())
         new_canvas.fill(Qt.GlobalColor.transparent)
         if self._canvas:
-            painter = QPainter(new_canvas)
-            painter.drawPixmap(0, 0, self._canvas)
-            painter.end()
+            p = QPainter(new_canvas)
+            p.drawPixmap(0, 0, self._canvas)
+            p.end()
         self._canvas = new_canvas
         super().resizeEvent(event)
 
     def paintEvent(self, event):
-        painter = QPainter(self)
         if self._canvas:
-            painter.drawPixmap(0, 0, self._canvas)
-        # Rubber-band preview for shape tools
-        if self._start_pos and self._preview_pos and self._tool != DrawTool.PEN:
-            pen = QPen(self._pen_color, self._pen_width, Qt.PenStyle.SolidLine,
-                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            self._draw_shape(painter, self._tool, self._start_pos, self._preview_pos)
-        painter.end()
+            p = QPainter(self)
+            p.drawPixmap(0, 0, self._canvas)
+            p.end()
 
     def mousePressEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
-            return
-        pos = event.position().toPoint()
-        if self._tool == DrawTool.PEN:
-            self._last_pos = pos
-        else:
-            self._start_pos = pos
-            self._preview_pos = pos
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._last_pos = event.position().toPoint()
 
     def mouseMoveEvent(self, event):
-        if not (event.buttons() & Qt.MouseButton.LeftButton):
+        if not (event.buttons() & Qt.MouseButton.LeftButton) or self._last_pos is None:
             return
-        pos = event.position().toPoint()
-        if self._tool == DrawTool.PEN:
-            if self._last_pos is not None:
-                self._ensure_canvas()
-                painter = QPainter(self._canvas)
-                pen = QPen(self._pen_color, self._pen_width, Qt.PenStyle.SolidLine,
-                           Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-                painter.setPen(pen)
-                painter.drawLine(self._last_pos, pos)
-                painter.end()
-                self._last_pos = pos
-        else:
-            self._preview_pos = pos
-        self.update()
-
-    def mouseReleaseEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
-            return
-        pos = event.position().toPoint()
-        if self._tool == DrawTool.PEN:
-            self._last_pos = None
-        elif self._start_pos is not None:
-            self._ensure_canvas()
-            painter = QPainter(self._canvas)
-            pen = QPen(self._pen_color, self._pen_width, Qt.PenStyle.SolidLine,
-                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            self._draw_shape(painter, self._tool, self._start_pos, pos)
-            painter.end()
-            self._start_pos = None
-            self._preview_pos = None
-            self.update()
-
-    # ── helpers ───────────────────────────────────────────────────────────
-
-    def _ensure_canvas(self):
         if self._canvas is None:
             self._canvas = QPixmap(self.size())
             self._canvas.fill(Qt.GlobalColor.transparent)
+        p = QPainter(self._canvas)
+        pen = QPen(self._pen_color, self._pen_width,
+                   Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.drawLine(self._last_pos, event.position().toPoint())
+        p.end()
+        self._last_pos = event.position().toPoint()
+        self.update()
 
-    @staticmethod
-    def _draw_shape(painter: QPainter, tool: DrawTool, p1: QPoint, p2: QPoint):
-        if tool == DrawTool.RECT:
-            painter.drawRect(QRect(p1, p2).normalized())
-        elif tool == DrawTool.CIRCLE:
-            painter.drawEllipse(QRect(p1, p2).normalized())
-        elif tool == DrawTool.ARROW:
-            painter.drawLine(p1, p2)
-            # Arrowhead
-            dx, dy = p2.x() - p1.x(), p2.y() - p1.y()
-            length = math.hypot(dx, dy)
-            if length < 1:
-                return
-            ux, uy = dx / length, dy / length
-            head = 18
-            spread = 0.4
-            lx = p2.x() - head * (ux + spread * uy)
-            ly = p2.y() - head * (uy - spread * ux)
-            rx = p2.x() - head * (ux - spread * uy)
-            ry = p2.y() - head * (uy + spread * ux)
-            painter.drawLine(p2, QPoint(int(lx), int(ly)))
-            painter.drawLine(p2, QPoint(int(rx), int(ry)))
+    def mouseReleaseEvent(self, event):
+        self._last_pos = None
 
-
-class AnnotationToolbar(QWidget):
-    """Small tool-selector strip shown at top-centre when draw mode is active."""
-
-    tool_selected = pyqtSignal(object)   # DrawTool
-    color_cycled  = pyqtSignal()
-    clear_clicked = pyqtSignal()
-
-    _TOOLS = [
-        (DrawTool.PEN,    "✏",  "Pen (1)"),
-        (DrawTool.ARROW,  "↗",  "Arrow (2)"),
-        (DrawTool.RECT,   "▭",  "Rect (3)"),
-        (DrawTool.CIRCLE, "○",  "Circle (4)"),
-    ]
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(4)
-
-        btn_base = (
-            "border-radius:4px; padding:4px 10px; font-size:13px; font-weight:600;"
-            "border:1px solid rgba(255,255,255,60);"
-        )
-        self._tool_btns: dict[DrawTool, QPushButton] = {}
-        for tool, icon, tip in self._TOOLS:
-            btn = QPushButton(icon)
-            btn.setToolTip(tip)
-            btn.setFixedSize(38, 32)
-            btn.setStyleSheet(f"color:white; background:rgba(0,0,0,160); {btn_base}")
-            btn.clicked.connect(lambda checked, t=tool: self.tool_selected.emit(t))
-            layout.addWidget(btn)
-            self._tool_btns[tool] = btn
-
-        layout.addSpacing(8)
-
-        self._color_btn = QPushButton("●")
-        self._color_btn.setFixedSize(38, 32)
-        self._color_btn.setStyleSheet(
-            f"color:#ff4444; background:rgba(0,0,0,160); {btn_base}"
-        )
-        self._color_btn.setToolTip("Cycle color (K)")
-        self._color_btn.clicked.connect(self.color_cycled.emit)
-        layout.addWidget(self._color_btn)
-
-        clr_btn = QPushButton("✕ Clear")
-        clr_btn.setFixedSize(68, 32)
-        clr_btn.setStyleSheet(f"color:#ff6666; background:rgba(0,0,0,160); {btn_base}")
-        clr_btn.setToolTip("Clear all (C)")
-        clr_btn.clicked.connect(self.clear_clicked.emit)
-        layout.addWidget(clr_btn)
-
-        self.adjustSize()
-        self.hide()
-
-    def highlight_tool(self, tool: DrawTool):
-        for t, btn in self._tool_btns.items():
-            active = t == tool
-            btn.setStyleSheet(
-                f"color:{'#00ffcc' if active else 'white'};"
-                f"background:{'rgba(0,80,60,200)' if active else 'rgba(0,0,0,160)'};"
-                f"border-radius:4px; padding:4px 10px; font-size:13px; font-weight:600;"
-                f"border:1px solid {'#00ffcc' if active else 'rgba(255,255,255,60)'};"
-            )
-
-    def update_color(self, color: QColor):
-        self._color_btn.setStyleSheet(
-            f"color:{color.name()}; background:rgba(0,0,0,160);"
-            "border-radius:4px; padding:4px 10px; font-size:13px; font-weight:600;"
-            "border:1px solid rgba(255,255,255,60);"
-        )
+    def keyPressEvent(self, event: QKeyEvent):
+        # Forward every key to the parent so PresentationWindow always handles keys
+        if self.parent():
+            self.parent().keyPressEvent(event)
+        else:
+            super().keyPressEvent(event)
 
 
 class PresentationWindow(QWidget):
@@ -263,7 +113,7 @@ class PresentationWindow(QWidget):
         self._setup_ui()
         self._setup_timers()
 
-    # ── VLC init ──────────────────────────────────────────────────────────
+    # ── VLC ───────────────────────────────────────────────────────────────
 
     def _init_vlc(self):
         if self._instance is not None:
@@ -285,21 +135,14 @@ class PresentationWindow(QWidget):
     # ── UI setup ──────────────────────────────────────────────────────────
 
     def _setup_ui(self):
-        # Drawing overlay — sits behind HUD
         self._drawing = DrawingOverlay(self)
         self._drawing.hide()
 
-        # Annotation toolbar — child of self so it's above drawing but controllable
-        self._ann_toolbar = AnnotationToolbar(self)
-        self._ann_toolbar.tool_selected.connect(self._on_tool_selected)
-        self._ann_toolbar.color_cycled.connect(self._on_color_cycled)
-        self._ann_toolbar.clear_clicked.connect(self._drawing.clear)
-
-        # Pinned notes label — direct child of self so it survives HUD hide
+        # Pinned notes — direct child of self so it persists when HUD hides
         self._pinned_notes = QLabel("", self)
         self._pinned_notes.setStyleSheet(
-            "color:#ffe066; background:rgba(0,0,0,180);"
-            "padding:6px 12px; border-radius:4px; border:1px solid rgba(255,220,80,120);"
+            "color:#ffe066; background:rgba(0,0,0,185);"
+            "padding:8px 14px; border-radius:5px; border:1px solid rgba(255,220,80,130);"
         )
         self._pinned_notes.setFont(QFont("Arial", 13))
         self._pinned_notes.setWordWrap(True)
@@ -310,45 +153,67 @@ class PresentationWindow(QWidget):
         self._hud = QWidget(self)
         self._hud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
 
-        hud_style = "color: white; background: rgba(0,0,0,160); padding: 4px 8px; border-radius: 3px;"
+        hud_s = "color:white; background:rgba(0,0,0,160); padding:4px 8px; border-radius:3px;"
+        draw_s = "color:white; background:rgba(0,0,0,160); border:none; font-size:13px; padding:4px 10px; border-radius:3px; border:1px solid rgba(255,255,255,60);"
 
         self._name_label = QLabel(self._playlist_name, self._hud)
-        self._name_label.setStyleSheet(hud_style)
+        self._name_label.setStyleSheet(hud_s)
         self._name_label.setFont(QFont("Arial", 12))
 
         self._clip_label = QLabel("", self._hud)
-        self._clip_label.setStyleSheet(hud_style)
+        self._clip_label.setStyleSheet(hud_s)
         self._clip_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
-        # Inline notes (hidden when pinned notes are showing)
         self._notes_label = QLabel("", self._hud)
         self._notes_label.setStyleSheet(
-            "color: #cccccc; background: rgba(0,0,0,140); padding: 3px 8px; border-radius: 3px;"
+            "color:#cccccc; background:rgba(0,0,0,140); padding:3px 8px; border-radius:3px;"
         )
         self._notes_label.setFont(QFont("Arial", 11))
         self._notes_label.setWordWrap(True)
         self._notes_label.setMaximumWidth(600)
 
         self._counter_label = QLabel("", self._hud)
-        self._counter_label.setStyleSheet(hud_style)
+        self._counter_label.setStyleSheet(hud_s)
         self._counter_label.setFont(QFont("Arial", 12))
 
-        # Notes-pin hint (shown bottom-right alongside counter)
-        self._notes_hint = QLabel("[N] pin notes", self._hud)
-        self._notes_hint.setStyleSheet(
-            "color: rgba(255,255,255,100); background: transparent; font-size: 8pt;"
-        )
-        self._notes_hint.setFont(QFont("Arial", 8))
+        # Draw-mode HUD strip (top-centre) — only visible when drawing
+        self._color_btn = QPushButton("● Color", self._hud)
+        self._color_btn.setStyleSheet(f"{draw_s} color:{_PEN_COLORS[0]};")
+        self._color_btn.setFixedSize(80, 30)
+        self._color_btn.clicked.connect(self._cycle_color)
+        self._color_btn.hide()
 
-        btn_style = (
-            "color: white; background: rgba(0,0,0,160); border: none;"
-            "font-size: 20px; padding: 6px 12px; border-radius: 3px;"
+        self._thin_btn = QPushButton("− Thin", self._hud)
+        self._thin_btn.setStyleSheet(draw_s)
+        self._thin_btn.setFixedSize(64, 30)
+        self._thin_btn.clicked.connect(lambda: self._drawing.thinner())
+        self._thin_btn.hide()
+
+        self._thick_btn = QPushButton("+ Thick", self._hud)
+        self._thick_btn.setStyleSheet(draw_s)
+        self._thick_btn.setFixedSize(72, 30)
+        self._thick_btn.clicked.connect(lambda: self._drawing.thicker())
+        self._thick_btn.hide()
+
+        self._clear_btn = QPushButton("✕ Clear", self._hud)
+        self._clear_btn.setStyleSheet(f"{draw_s} color:#ff8888;")
+        self._clear_btn.setFixedSize(72, 30)
+        self._clear_btn.clicked.connect(self._drawing.clear)
+        self._clear_btn.hide()
+
+        self._draw_hint = QLabel("", self._hud)
+        self._draw_hint.setStyleSheet(
+            "color:rgba(255,255,255,130); background:transparent; font-size:8pt;"
         )
+        self._draw_hint.hide()
+
+        # Playback buttons
+        btn_s = "color:white; background:rgba(0,0,0,160); border:none; font-size:20px; padding:6px 12px; border-radius:3px;"
         self._prev_btn = QPushButton("\u23ee", self._hud)
         self._play_btn = QPushButton("\u23f8", self._hud)
         self._next_btn = QPushButton("\u23ed", self._hud)
-        for btn in [self._prev_btn, self._play_btn, self._next_btn]:
-            btn.setStyleSheet(btn_style)
+        for btn in (self._prev_btn, self._play_btn, self._next_btn):
+            btn.setStyleSheet(btn_s)
             btn.setFixedSize(50, 40)
         self._prev_btn.clicked.connect(self._prev_clip)
         self._play_btn.clicked.connect(self._toggle_play)
@@ -395,30 +260,34 @@ class PresentationWindow(QWidget):
         self._clip_label.adjustSize()
         self._clip_label.move(12, h - 72)
 
-        self._notes_label.adjustSize()
         notes_visible = bool(self._notes_label.text()) and not self._notes_pinned
         self._notes_label.setVisible(notes_visible)
+        self._notes_label.adjustSize()
         self._notes_label.move(12, h - 50)
 
         self._counter_label.adjustSize()
         self._counter_label.move(w - self._counter_label.width() - 12, h - 72)
-
-        self._notes_hint.adjustSize()
-        self._notes_hint.move(w - self._notes_hint.width() - 12, h - 52)
 
         cx = (w - 160) // 2
         self._prev_btn.move(cx, h - 52)
         self._play_btn.move(cx + 55, h - 52)
         self._next_btn.move(cx + 110, h - 52)
 
-        # Annotation toolbar — centred at top
-        self._ann_toolbar.adjustSize()
-        self._ann_toolbar.move((w - self._ann_toolbar.width()) // 2, 8)
+        # Draw-mode controls — centred near top
+        strip_w = 80 + 64 + 72 + 72 + 12 * 3
+        sx = (w - strip_w) // 2
+        sy = 10
+        self._color_btn.move(sx, sy)
+        self._thin_btn.move(sx + 88, sy)
+        self._thick_btn.move(sx + 160, sy)
+        self._clear_btn.move(sx + 240, sy)
+        self._draw_hint.adjustSize()
+        self._draw_hint.move((w - self._draw_hint.width()) // 2, sy + 34)
 
-        # Pinned notes — bottom-left, above clip label
+        # Pinned notes
         self._pinned_notes.setMaximumWidth(min(700, w - 24))
         self._pinned_notes.adjustSize()
-        self._pinned_notes.move(12, h - 90 - self._pinned_notes.height())
+        self._pinned_notes.move(12, h - 100 - self._pinned_notes.height())
 
     # ── Playback ──────────────────────────────────────────────────────────
 
@@ -430,9 +299,14 @@ class PresentationWindow(QWidget):
         media = self._instance.media_new(self._video_path)
         self._player.set_media(media)
         self._player.play()
-        QTimer.singleShot(200, lambda: self._player.set_time(int(clip.start * 1000)))
+        QTimer.singleShot(200, lambda: self._seek_to(clip.start))
         self._poll_timer.start()
+        self._play_btn.setText("\u23f8")
         self._update_hud_labels()
+
+    def _seek_to(self, t: float):
+        if self._player:
+            self._player.set_time(int(t * 1000))
 
     def _check_clip_end(self):
         if self._player is None or not self._clips:
@@ -442,7 +316,7 @@ class PresentationWindow(QWidget):
         if current_time >= clip.end:
             self._poll_timer.stop()
             if self._current_index + 1 < len(self._clips):
-                QTimer.singleShot(1000, lambda: self._play_clip(self._current_index + 1))
+                QTimer.singleShot(800, lambda: self._play_clip(self._current_index + 1))
             else:
                 self._player.pause()
                 self._play_btn.setText("\u25b6")
@@ -480,12 +354,22 @@ class PresentationWindow(QWidget):
         self._play_clip(min(len(self._clips) - 1, self._current_index + 1))
 
     def _step(self, seconds: float):
+        """Seek relative to current position. Clamped to clip start/end."""
         if self._player is None or not self._clips:
             return
         clip = self._clips[self._current_index]
         current = self._player.get_time() / 1000.0
-        target = max(clip.start, min(clip.end, current + seconds))
-        self._player.set_time(int(target * 1000))
+        target = max(clip.start, min(clip.end - 0.1, current + seconds))
+        self._seek_to(target)
+
+    def _frame_step(self, direction: int):
+        """Advance/rewind one frame (~33 ms). Pauses if playing."""
+        if self._player is None:
+            return
+        if self._player.is_playing():
+            self._player.pause()
+            self._play_btn.setText("\u25b6")
+        self._step(direction * 0.033)
 
     def _set_rate(self, delta: float):
         if self._player is None:
@@ -500,31 +384,35 @@ class PresentationWindow(QWidget):
 
     def _show_hud(self):
         self._hud.setVisible(True)
-        self._hud_timer.start()
+        if not self._drawing_mode:
+            self._hud_timer.start()
 
     # ── Drawing mode ──────────────────────────────────────────────────────
 
     def _toggle_drawing(self):
         self._drawing_mode = not self._drawing_mode
         self._drawing.setVisible(self._drawing_mode)
-        self._ann_toolbar.setVisible(self._drawing_mode)
+        for w in (self._color_btn, self._thin_btn, self._thick_btn,
+                  self._clear_btn, self._draw_hint):
+            w.setVisible(self._drawing_mode)
         if self._drawing_mode:
+            self._hud_timer.stop()
             self._drawing.raise_()
-            self._ann_toolbar.raise_()
             self._hud.raise_()
-            self._ann_toolbar.highlight_tool(self._drawing.tool)
+            self._pinned_notes.raise_()
+            self._draw_hint.setText("[D] exit draw  [K] color  [C] clear  draw with mouse")
             self._show_hud()
         else:
             self._hud_timer.start()
         self._reposition_hud()
 
-    def _on_tool_selected(self, tool: DrawTool):
-        self._drawing.set_tool(tool)
-        self._ann_toolbar.highlight_tool(tool)
-
-    def _on_color_cycled(self):
-        self._drawing.cycle_color()
-        self._ann_toolbar.update_color(self._drawing.color)
+    def _cycle_color(self):
+        color = self._drawing.cycle_color()
+        self._color_btn.setStyleSheet(
+            f"color:{color.name()}; background:rgba(0,0,0,160); border:none;"
+            "font-size:13px; padding:4px 10px; border-radius:3px;"
+            "border:1px solid rgba(255,255,255,60);"
+        )
 
     # ── Notes pin ─────────────────────────────────────────────────────────
 
@@ -534,16 +422,13 @@ class PresentationWindow(QWidget):
         self._pinned_notes.setVisible(self._notes_pinned and bool(notes_text))
         if self._notes_pinned:
             self._pinned_notes.raise_()
-        hint = "[N] unpin notes" if self._notes_pinned else "[N] pin notes"
-        self._notes_hint.setText(hint)
         self._reposition_hud()
         self._show_hud()
 
     # ── Mouse / keyboard ──────────────────────────────────────────────────
 
     def mouseMoveEvent(self, event):
-        if not self._drawing_mode:
-            self._show_hud()
+        self._show_hud()
 
     def keyPressEvent(self, event: QKeyEvent):
         key = event.key()
@@ -557,37 +442,45 @@ class PresentationWindow(QWidget):
                 self._player.stop()
             self.closed.emit()
             self.close()
-        elif key == Qt.Key.Key_D:
-            self._toggle_drawing()
-        elif key == Qt.Key.Key_N:
-            self._toggle_notes_pin()
-        elif key == Qt.Key.Key_C and self._drawing_mode:
-            self._drawing.clear()
-        elif key == Qt.Key.Key_K and self._drawing_mode:
-            self._on_color_cycled()
-        elif key == Qt.Key.Key_1 and self._drawing_mode:
-            self._on_tool_selected(DrawTool.PEN)
-        elif key == Qt.Key.Key_2 and self._drawing_mode:
-            self._on_tool_selected(DrawTool.ARROW)
-        elif key == Qt.Key.Key_3 and self._drawing_mode:
-            self._on_tool_selected(DrawTool.RECT)
-        elif key == Qt.Key.Key_4 and self._drawing_mode:
-            self._on_tool_selected(DrawTool.CIRCLE)
+
         elif key == Qt.Key.Key_Space:
             self._toggle_play()
+
+        # Skip forward / back between clips — always Shift+arrow
+        elif key == Qt.Key.Key_Left and shift:
+            self._prev_clip()
+        elif key == Qt.Key.Key_Right and shift:
+            self._next_clip()
+
+        # Seek ±5 s within current clip
         elif key == Qt.Key.Key_Left and not self._drawing_mode:
-            if shift:
-                self._prev_clip()
-            else:
-                self._step(-5)
+            self._step(-5)
         elif key == Qt.Key.Key_Right and not self._drawing_mode:
-            if shift:
-                self._next_clip()
-            else:
-                self._step(5)
+            self._step(5)
+
+        # Frame step — comma / period (or < / >)
+        elif key in (Qt.Key.Key_Comma, Qt.Key.Key_Less):
+            self._frame_step(-1)
+        elif key in (Qt.Key.Key_Period, Qt.Key.Key_Greater):
+            self._frame_step(1)
+
+        # Speed
         elif key == Qt.Key.Key_BracketLeft:
             self._set_rate(-0.25)
         elif key == Qt.Key.Key_BracketRight:
             self._set_rate(0.25)
+
+        # Drawing
+        elif key == Qt.Key.Key_D:
+            self._toggle_drawing()
+        elif key == Qt.Key.Key_C and self._drawing_mode:
+            self._drawing.clear()
+        elif key == Qt.Key.Key_K and self._drawing_mode:
+            self._cycle_color()
+
+        # Notes
+        elif key == Qt.Key.Key_N:
+            self._toggle_notes_pin()
+
         else:
             super().keyPressEvent(event)
