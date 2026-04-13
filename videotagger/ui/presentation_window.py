@@ -110,15 +110,14 @@ class PresentationWindow(QWidget):
     def _init_vlc(self):
         if self._instance is not None:
             return
-        args = [
-            "--no-plugins-cache",
-            "--no-key-action",       # CRITICAL: stop VLC consuming keyboard events
-            "--no-mouse-events",     # stop VLC consuming mouse events on its surface
-        ]
+        args = ["--no-plugins-cache"]
         if sys.platform == "linux":
             args.append("--no-xlib")
         self._instance = vlc.Instance(*args)
         self._player = self._instance.media_player_new()
+        # Tell VLC not to handle keyboard or mouse input — Qt handles everything
+        self._player.video_set_key_input(False)
+        self._player.video_set_mouse_input(False)
 
     def _attach_vlc_window(self):
         # Give VLC the *video surface* child widget, not the main window.
