@@ -48,6 +48,7 @@ class ClipsPanel(QWidget):
         t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        t.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         t.cellClicked.connect(self._on_clip_clicked)
         t.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         t.customContextMenuRequested.connect(self._clips_context_menu)
@@ -112,12 +113,28 @@ class ClipsPanel(QWidget):
             self._playlists_list.addItem(item)
 
     def _on_clip_clicked(self, row, col):
-        item = self._clips_table.item(row, 0)
-        if item:
-            self.clip_selected.emit(item.data(Qt.ItemDataRole.UserRole))
+        # Only seek when a single row is selected (not during multi-select)
+        if len(self._clips_table.selectedItems()) // self._clips_table.columnCount() == 1:
+            item = self._clips_table.item(row, 0)
+            if item:
+                self.clip_selected.emit(item.data(Qt.ItemDataRole.UserRole))
 
     def _on_playlist_clicked(self, item: QListWidgetItem):
         self.playlist_selected.emit(item.data(Qt.ItemDataRole.UserRole))
+
+    def _selected_clip_ids(self) -> list[str]:
+        """Return clip IDs for all currently selected (visible) rows."""
+        seen = set()
+        ids = []
+        for idx in self._clips_table.selectedIndexes():
+            row = idx.row()
+            if row in seen:
+                continue
+            seen.add(row)
+            item = self._clips_table.item(row, 0)
+            if item:
+                ids.append(item.data(Qt.ItemDataRole.UserRole))
+        return ids
 
     def _clips_context_menu(self, pos):
         if not self._project:
@@ -125,10 +142,14 @@ class ClipsPanel(QWidget):
         item = self._clips_table.itemAt(pos)
         if not item:
             return
-        clip_id = self._clips_table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
+        clip_ids = self._selected_clip_ids()
+        if not clip_ids:
+            clip_ids = [self._clips_table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)]
+        n = len(clip_ids)
+        label = f"{n} clip{'s' if n > 1 else ''}"
         menu = QMenu(self)
         for pl in self._project.playlists:
-            act = menu.addAction(f"Add to: {pl.name}")
+            act = menu.addAction(f"Add {label} to: {pl.name}")
             act.setData(pl.id)
         if self._project.playlists:
             menu.addSeparator()
@@ -140,7 +161,9 @@ class ClipsPanel(QWidget):
                 self.new_playlist_requested.emit()
             else:
                 from videotagger.core.playlist_builder import PlaylistBuilder
-                PlaylistBuilder(self._project).add_clip(chosen.data(), clip_id)
+                builder = PlaylistBuilder(self._project)
+                for clip_id in clip_ids:
+                    builder.add_clip(chosen.data(), clip_id)
                 self._refresh_playlists()
 
     def _playlists_context_menu(self, pos):
