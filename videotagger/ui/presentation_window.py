@@ -1,11 +1,13 @@
-# videotagger/ui/presentation_window.py
 from __future__ import annotations
-import sys
-import vlc
+
 from typing import List
-from PyQt6.QtWidgets import QWidget, QLabel, QPushButton
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint
-from PyQt6.QtGui import QKeyEvent, QFont, QPainter, QPen, QColor, QPixmap
+
+from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QKeyEvent, QPainter, QPen, QPixmap
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
+
 from videotagger.models.project import Clip
 
 _PEN_COLORS = ["#ff4444", "#ffcc00", "#44aaff", "#44ff88", "#ffffff"]
@@ -21,7 +23,7 @@ class DrawingOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._canvas: QPixmap | None = None
-        self._last_pos: QPoint | None = None
+        self._last_pos = None
         self._color_index = 0
         self._pen_color = QColor(_PEN_COLORS[0])
         self._pen_width = 4
@@ -61,7 +63,6 @@ class DrawingOverlay(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_pos = event.position().toPoint()
-        # Ensure parent keeps focus so keyboard shortcuts still work
         if self.parent():
             self.parent().setFocus()
 
@@ -73,7 +74,8 @@ class DrawingOverlay(QWidget):
             self._canvas.fill(Qt.GlobalColor.transparent)
         p = QPainter(self._canvas)
         pen = QPen(self._pen_color, self._pen_width,
-                   Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+                   Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                   Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)
         p.drawLine(self._last_pos, event.position().toPoint())
         p.end()
@@ -98,52 +100,26 @@ class PresentationWindow(QWidget):
         self._playlist_name = playlist_name
         self._category_map: dict = category_map or {}
         self._current_index = 0
-        self._instance = None
-        self._player = None
         self._drawing_mode = False
         self._notes_pinned = False
+        self._player = QMediaPlayer()
+        self._audio = QAudioOutput()
+        self._player.setAudioOutput(self._audio)
         self._setup_ui()
         self._setup_timers()
-
-    # ── VLC ───────────────────────────────────────────────────────────────
-
-    def _init_vlc(self):
-        if self._instance is not None:
-            return
-        args = ["--no-plugins-cache"]
-        if sys.platform == "linux":
-            args.append("--no-xlib")
-        self._instance = vlc.Instance(*args)
-        self._player = self._instance.media_player_new()
-        # Tell VLC not to handle keyboard or mouse input — Qt handles everything
-        self._player.video_set_key_input(False)
-        self._player.video_set_mouse_input(False)
-
-    def _attach_vlc_window(self):
-        # Give VLC the *video surface* child widget, not the main window.
-        # This keeps the main window's event loop intact so Qt receives all keys.
-        wid = int(self._video_surface.winId())
-        if sys.platform == "win32":
-            self._player.set_hwnd(wid)
-        elif sys.platform == "darwin":
-            self._player.set_nsobject(wid)
-        else:
-            self._player.set_xwindow(wid)
+        self._player.positionChanged.connect(self._on_position_changed)
 
     # ── UI setup ──────────────────────────────────────────────────────────
 
     def _setup_ui(self):
-        # Video surface — VLC renders here. NoFocus so it never steals keys.
-        self._video_surface = QWidget(self)
-        self._video_surface.setStyleSheet("background: black;")
-        self._video_surface.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._video_surface.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
+        self._video_widget = QVideoWidget(self)
+        self._video_widget.setStyleSheet("background: black;")
+        self._video_widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._player.setVideoOutput(self._video_widget)
 
-        # Drawing overlay
         self._drawing = DrawingOverlay(self)
         self._drawing.hide()
 
-        # Pinned notes — direct child of self, persists when HUD hides
         self._pinned_notes = QLabel("", self)
         self._pinned_notes.setStyleSheet(
             "color:#ffe066; background:rgba(0,0,0,185);"
@@ -154,7 +130,6 @@ class PresentationWindow(QWidget):
         self._pinned_notes.setMaximumWidth(700)
         self._pinned_notes.hide()
 
-        # HUD overlay (all controls sit inside this)
         self._hud = QWidget(self)
         self._hud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self._hud.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -190,7 +165,6 @@ class PresentationWindow(QWidget):
         self._counter_label.setFont(QFont("Arial", 12))
         self._counter_label.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        # Draw toolbar buttons
         self._color_btn = QPushButton("● Color", self._hud)
         self._color_btn.setStyleSheet(f"color:{_PEN_COLORS[0]}; {draw_s}")
         self._color_btn.setFixedSize(80, 30)
@@ -226,7 +200,6 @@ class PresentationWindow(QWidget):
         self._draw_hint.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._draw_hint.hide()
 
-        # Playback buttons
         btn_s = (
             "color:white; background:rgba(0,0,0,160); border:none;"
             "font-size:20px; padding:6px 12px; border-radius:3px;"
@@ -245,21 +218,12 @@ class PresentationWindow(QWidget):
         self.setMouseTracking(True)
 
     def _setup_timers(self):
-        self._poll_timer = QTimer(self)
-        self._poll_timer.setInterval(200)
-        self._poll_timer.timeout.connect(self._check_clip_end)
-
         self._hud_timer = QTimer(self)
         self._hud_timer.setSingleShot(True)
         self._hud_timer.setInterval(3000)
         self._hud_timer.timeout.connect(self._hide_hud)
 
     # ── Qt lifecycle ──────────────────────────────────────────────────────
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._init_vlc()
-        self._attach_vlc_window()
 
     def showFullScreen(self):
         super().showFullScreen()
@@ -268,8 +232,7 @@ class PresentationWindow(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Video surface fills the whole window
-        self._video_surface.resize(self.size())
+        self._video_widget.resize(self.size())
         self._drawing.resize(self.size())
         self._hud.resize(self.size())
         self._reposition_hud()
@@ -298,7 +261,6 @@ class PresentationWindow(QWidget):
         self._play_btn.move(cx + 55, h - 52)
         self._next_btn.move(cx + 110, h - 52)
 
-        # Draw toolbar
         sx = (w - (80 + 64 + 72 + 72 + 36)) // 2
         sy = 10
         self._color_btn.move(sx, sy)
@@ -308,7 +270,6 @@ class PresentationWindow(QWidget):
         self._draw_hint.adjustSize()
         self._draw_hint.move((w - self._draw_hint.width()) // 2, sy + 36)
 
-        # Pinned notes
         self._pinned_notes.setMaximumWidth(min(700, w - 24))
         self._pinned_notes.adjustSize()
         self._pinned_notes.move(12, h - 100 - self._pinned_notes.height())
@@ -316,35 +277,29 @@ class PresentationWindow(QWidget):
     # ── Playback ──────────────────────────────────────────────────────────
 
     def _play_clip(self, index: int):
-        if self._player is None or not self._clips or index < 0 or index >= len(self._clips):
+        if not self._clips or index < 0 or index >= len(self._clips):
             return
         self._current_index = index
         clip = self._clips[index]
-        media = self._instance.media_new(self._video_path)
-        self._player.set_media(media)
+        self._player.setSource(QUrl.fromLocalFile(self._video_path))
         self._player.play()
         QTimer.singleShot(300, lambda: self._seek_to(clip.start))
-        self._poll_timer.start()
         self._play_btn.setText("\u23f8")
         self._update_hud_labels()
-        # Reclaim keyboard focus after VLC starts
         QTimer.singleShot(400, self.setFocus)
 
     def _seek_to(self, t: float):
-        if self._player:
-            self._player.set_time(int(t * 1000))
+        self._player.setPosition(int(t * 1000))
 
-    def _check_clip_end(self):
-        if self._player is None or not self._clips:
+    def _on_position_changed(self, ms: int):
+        if not self._clips:
             return
         clip = self._clips[self._current_index]
-        current_time = self._player.get_time() / 1000.0
-        if current_time >= clip.end:
-            self._poll_timer.stop()
+        if ms / 1000.0 >= clip.end:
+            self._player.pause()
             if self._current_index + 1 < len(self._clips):
                 QTimer.singleShot(800, lambda: self._play_clip(self._current_index + 1))
             else:
-                self._player.pause()
                 self._play_btn.setText("\u25b6")
 
     def _update_hud_labels(self):
@@ -362,9 +317,7 @@ class PresentationWindow(QWidget):
         self._reposition_hud()
 
     def _toggle_play(self):
-        if self._player is None:
-            return
-        if self._player.is_playing():
+        if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self._player.pause()
             self._play_btn.setText("\u25b6")
         else:
@@ -373,38 +326,32 @@ class PresentationWindow(QWidget):
         self.setFocus()
 
     def _prev_clip(self):
-        self._poll_timer.stop()
         self._play_clip(max(0, self._current_index - 1))
 
     def _next_clip(self):
-        self._poll_timer.stop()
         self._play_clip(min(len(self._clips) - 1, self._current_index + 1))
 
     def _step(self, seconds: float):
-        if self._player is None or not self._clips:
+        if not self._clips:
             return
         clip = self._clips[self._current_index]
-        current = self._player.get_time() / 1000.0
+        current = self._player.position() / 1000.0
         target = max(clip.start, min(clip.end - 0.1, current + seconds))
         self._seek_to(target)
 
     def _frame_step(self, direction: int):
-        """Step one frame forward (VLC native) or back (~40 ms rewind)."""
-        if self._player is None:
-            return
-        if self._player.is_playing():
+        if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self._player.pause()
             self._play_btn.setText("\u25b6")
         if direction > 0:
-            self._player.next_frame()
+            pos = self._player.position()
+            self._player.setPosition(pos + 40)  # ~1 frame at 25fps
         else:
             self._step(-0.04)
 
     def _set_rate(self, delta: float):
-        if self._player is None:
-            return
-        rate = max(0.25, min(4.0, self._player.get_rate() + delta))
-        self._player.set_rate(rate)
+        rate = max(0.25, min(4.0, self._player.playbackRate() + delta))
+        self._player.setPlaybackRate(rate)
 
     # ── HUD ───────────────────────────────────────────────────────────────
 
@@ -472,27 +419,25 @@ class PresentationWindow(QWidget):
         shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
         if key in (Qt.Key.Key_Escape, Qt.Key.Key_F11):
-            self._poll_timer.stop()
             self._hud_timer.stop()
-            if self._player is not None:
-                self._player.stop()
+            self._player.stop()
             self.closed.emit()
             self.close()
 
         elif key == Qt.Key.Key_Space:
             self._toggle_play()
 
-        elif key == Qt.Key.Key_Left:
+        elif key == Qt.Key.Key_Tab:
             if shift:
                 self._prev_clip()
-            elif not self._drawing_mode:
-                self._step(-5)
-
-        elif key == Qt.Key.Key_Right:
-            if shift:
+            else:
                 self._next_clip()
-            elif not self._drawing_mode:
-                self._step(5)
+
+        elif key == Qt.Key.Key_Left and not self._drawing_mode:
+            self._step(-5)
+
+        elif key == Qt.Key.Key_Right and not self._drawing_mode:
+            self._step(5)
 
         elif key in (Qt.Key.Key_Comma, Qt.Key.Key_Less):
             self._frame_step(-1)
