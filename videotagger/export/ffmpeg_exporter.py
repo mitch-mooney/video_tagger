@@ -55,6 +55,6 @@ def export_playlist_clips(playlist_clips: List[Clip], project: Project,
         cat_name = cat.name if cat else "Unknown"
         key = f"{cat_name}_{clip.label}"
         label_counts[key] = label_counts.get(key, 0) + 1
-        out = export_clip(clip, cat_name, label_counts[key], project.video_path, output_dir)
+        out = export_clip(clip, cat_name, label_counts[key], project.merged_video_path, output_dir)
         outputs.append(out)
     return outputs

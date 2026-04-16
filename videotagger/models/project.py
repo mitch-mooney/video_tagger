@@ -2,8 +2,10 @@ import uuid
 from dataclasses import dataclass, field
 from typing import List
 
+
 def _new_id() -> str:
     return str(uuid.uuid4())
+
 
 @dataclass
 class Category:
@@ -11,6 +13,7 @@ class Category:
     color: str
     labels: List[str] = field(default_factory=list)
     id: str = field(default_factory=_new_id)
+
 
 @dataclass
 class Clip:
@@ -21,24 +24,29 @@ class Clip:
     notes: str = ""
     id: str = field(default_factory=_new_id)
 
+
 @dataclass
 class Playlist:
     name: str
     clip_ids: List[str] = field(default_factory=list)
     id: str = field(default_factory=_new_id)
 
+
 @dataclass
 class Project:
-    video_path: str
+    source_video_paths: List[str]
+    merged_video_path: str
     categories: List[Category] = field(default_factory=list)
     clips: List[Clip] = field(default_factory=list)
     playlists: List[Playlist] = field(default_factory=list)
-    version: int = 1
+    version: int = 2
+
 
 def project_to_dict(proj: Project) -> dict:
     return {
         "version": proj.version,
-        "video_path": proj.video_path,
+        "source_video_paths": proj.source_video_paths,
+        "merged_video_path": proj.merged_video_path,
         "categories": [
             {"id": c.id, "name": c.name, "color": c.color, "labels": c.labels}
             for c in proj.categories
@@ -54,7 +62,17 @@ def project_to_dict(proj: Project) -> dict:
         ],
     }
 
+
 def project_from_dict(d: dict) -> Project:
+    # v1 migration: video_path → source_video_paths + merged_video_path
+    if d.get("version", 1) == 1:
+        old_path = d.get("video_path", "")
+        source_paths = [old_path]
+        merged_path = old_path
+    else:
+        source_paths = d.get("source_video_paths", [])
+        merged_path = d.get("merged_video_path", "")
+
     categories = [
         Category(id=c["id"], name=c["name"], color=c["color"], labels=c["labels"])
         for c in d.get("categories", [])
@@ -69,8 +87,9 @@ def project_from_dict(d: dict) -> Project:
         for p in d.get("playlists", [])
     ]
     return Project(
-        version=d.get("version", 1),
-        video_path=d["video_path"],
+        version=2,
+        source_video_paths=source_paths,
+        merged_video_path=merged_path,
         categories=categories,
         clips=clips,
         playlists=playlists,
