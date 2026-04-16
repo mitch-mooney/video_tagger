@@ -150,6 +150,11 @@ class MainWindow(QMainWindow):
         self._import_act.setEnabled(False)
         file_menu.addAction(self._import_act)
 
+        self._package_act = QAction("&Package Project…", self)
+        self._package_act.triggered.connect(self._package_project)
+        self._package_act.setEnabled(False)
+        file_menu.addAction(self._package_act)
+
         file_menu.addSeparator()
         quit_act = QAction("&Quit", self)
         quit_act.setShortcut(QKeySequence.StandardKey.Quit)
@@ -216,36 +221,86 @@ class MainWindow(QMainWindow):
 
     def _load_project(self, project: Project, path):
         import os
-        if not os.path.exists(project.video_path):
+        if not os.path.exists(project.merged_video_path):
             from PyQt6.QtWidgets import QMessageBox, QFileDialog
+            msg = (
+                f"Merged video not found:\n{project.merged_video_path}\n\n"
+                "Would you like to locate the merged file, or re-merge from sources?"
+            )
             reply = QMessageBox.warning(
-                self, "Video Not Found",
-                f"Video file not found:\n{project.video_path}\n\nLocate it?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                self, "Video Not Found", msg,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No |
+                QMessageBox.StandardButton.Cancel,
             )
             if reply == QMessageBox.StandardButton.Yes:
                 new_path, _ = QFileDialog.getOpenFileName(
-                    self, "Locate Video", "",
-                    "Video Files (*.mp4 *.mov *.avi *.mkv *.m4v);;All Files (*)"
+                    self, "Locate Merged Video", "",
+                    "Video Files (*.mp4 *.mov *.avi *.mkv *.m4v);;All Files (*)",
                 )
                 if not new_path:
-                    return  # User cancelled
-                project.video_path = new_path
+                    return
+                project.merged_video_path = new_path
+            elif reply == QMessageBox.StandardButton.No:
+                from videotagger.core.video_merger import VideoMerger
+                from videotagger.ui.dialogs.merge_progress_dialog import MergeProgressDialog
+                from videotagger.export.ffmpeg_exporter import _ffmpeg_path
+                merger = VideoMerger(_ffmpeg_path())
+                dlg = MergeProgressDialog(
+                    merger, project.source_video_paths,
+                    project.merged_video_path, self,
+                )
+                if not dlg.exec() or not dlg.was_successful():
+                    return
             else:
-                return  # User declined to locate
+                return
+
         from videotagger.core.tagging_engine import TaggingEngine
         self._project = project
         self._project_path = path
         self._tagging_engine = TaggingEngine()
         self._save_act.setEnabled(True)
         self._import_act.setEnabled(True)
+        self._package_act.setEnabled(True)
         self.setWindowTitle("VideoTagger")
-        self._file_label.setText(os.path.basename(project.video_path))
-        self.player.load(project.video_path)
+        self._file_label.setText(os.path.basename(project.merged_video_path))
+        self.player.load(project.merged_video_path)
         self.timeline.set_project(project)
         self.tag_panel.refresh(project)
         self.clips_panel.refresh(project)
         self._wire_signals()
+
+    def _package_project(self):
+        if not self._project:
+            return
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        import copy, os, shutil
+        from videotagger.data.project_manager import ProjectManager
+
+        folder = QFileDialog.getExistingDirectory(self, "Choose Package Destination")
+        if not folder:
+            return
+
+        if self._project_path:
+            proj_stem = os.path.splitext(os.path.basename(self._project_path))[0]
+        else:
+            proj_stem = "VideoTaggerProject"
+
+        pkg_dir = os.path.join(folder, proj_stem)
+        try:
+            os.makedirs(pkg_dir, exist_ok=True)
+            shutil.copy2(self._project.merged_video_path, os.path.join(pkg_dir, "video.mp4"))
+            pkg_project = copy.copy(self._project)
+            pkg_project.merged_video_path = "./video.mp4"
+            pkg_project.source_video_paths = ["./video.mp4"]
+            ProjectManager.save(pkg_project, os.path.join(pkg_dir, "project.vtp"))
+        except Exception as exc:
+            QMessageBox.critical(self, "Package Failed", str(exc))
+            return
+
+        QMessageBox.information(
+            self, "Packaged",
+            f"Project packaged successfully:\n{pkg_dir}",
+        )
 
     def _wire_signals(self):
         if self._signals_wired:
@@ -367,7 +422,7 @@ class MainWindow(QMainWindow):
         pl = next(p for p in self._project.playlists if p.id == playlist_id)
         category_map = {cat.id: cat.name for cat in self._project.categories}
         self._presentation = PresentationWindow(
-            self._project.video_path, clips, pl.name, category_map, self
+            self._project.merged_video_path, clips, pl.name, category_map, self
         )
         self._presentation.showFullScreen()
 

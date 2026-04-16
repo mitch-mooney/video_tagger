@@ -7,7 +7,8 @@ def project_with_clips():
     cat = Category(name="Offence", color="#e94560", labels=["Goal"])
     c1 = Clip(category_id=cat.id, label="Goal", start=10.0, end=15.0)
     c2 = Clip(category_id=cat.id, label="Goal", start=30.0, end=35.0)
-    return Project(video_path="v.mp4", categories=[cat], clips=[c1, c2]), c1, c2
+    return Project(source_video_paths=["v.mp4"], merged_video_path="v.mp4",
+                   categories=[cat], clips=[c1, c2]), c1, c2
 
 def test_create_playlist(project_with_clips):
     proj, c1, c2 = project_with_clips

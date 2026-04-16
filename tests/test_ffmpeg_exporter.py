@@ -15,7 +15,8 @@ def test_build_clip_filename():
 def test_export_clip_calls_ffmpeg(tmp_path):
     cat = Category(id="cat1", name="Offence", color="#e94560", labels=["Goal"])
     clip = Clip(id="c1", category_id="cat1", label="Goal", start=10.0, end=17.0)
-    proj = Project(video_path="video.mp4", categories=[cat], clips=[clip])
+    proj = Project(source_video_paths=["video.mp4"], merged_video_path="video.mp4",
+                   categories=[cat], clips=[clip])
     mock_result = MagicMock()
     mock_result.returncode = 0
     with patch("videotagger.export.ffmpeg_exporter.subprocess.run", return_value=mock_result) as mock_run:
@@ -42,7 +43,8 @@ def test_export_playlist_clips_increments_instance(tmp_path):
     cat = Category(id="cat1", name="Offence", color="#e94560", labels=["Goal"])
     c1 = Clip(id="c1", category_id="cat1", label="Goal", start=10.0, end=15.0)
     c2 = Clip(id="c2", category_id="cat1", label="Goal", start=30.0, end=35.0)
-    proj = Project(video_path="video.mp4", categories=[cat], clips=[c1, c2])
+    proj = Project(source_video_paths=["video.mp4"], merged_video_path="video.mp4",
+                   categories=[cat], clips=[c1, c2])
     mock_result = MagicMock()
     mock_result.returncode = 0
     with patch("videotagger.export.ffmpeg_exporter.subprocess.run", return_value=mock_result):

@@ -15,7 +15,8 @@ def test_seconds_to_timecode_frames():
 def test_write_edl_creates_file(tmp_path):
     cat = Category(id="cat1", name="Offence", color="#e94560", labels=["Goal"])
     clip = Clip(id="c1", category_id="cat1", label="Goal", start=10.0, end=17.0)
-    proj = Project(video_path="video.mp4", categories=[cat], clips=[clip])
+    proj = Project(source_video_paths=["video.mp4"], merged_video_path="video.mp4",
+                   categories=[cat], clips=[clip])
     out = str(tmp_path / "out.edl")
     write_edl("Goals", [clip], proj, out)
     content = open(out).read()
@@ -28,7 +29,8 @@ def test_write_edl_sequential_record_times(tmp_path):
     cat = Category(id="cat1", name="Offence", color="#e94560", labels=["Goal"])
     c1 = Clip(id="c1", category_id="cat1", label="Goal", start=10.0, end=15.0)
     c2 = Clip(id="c2", category_id="cat1", label="Goal", start=30.0, end=38.0)
-    proj = Project(video_path="video.mp4", categories=[cat], clips=[c1, c2])
+    proj = Project(source_video_paths=["video.mp4"], merged_video_path="video.mp4",
+                   categories=[cat], clips=[c1, c2])
     out = str(tmp_path / "out.edl")
     write_edl("Goals", [c1, c2], proj, out)
     content = open(out).read()
