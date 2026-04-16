@@ -51,29 +51,26 @@ xattr -rd com.apple.quarantine /Applications/VideoTagger.app
 ```
 Then double-click normally to launch.
 
-### 3. Install VLC (required for video playback)
-
-VideoTagger uses VLC for video playback on macOS. Download and install it from:
-
-> **https://www.videolan.org/vlc/**
-
 ---
 
 ## Features
 
 - **Open video files** — `.mp4`, `.mov`, `.avi`, `.mkv`, `.m4v`
+- **Multi-file projects** — load a match split across multiple files (e.g. 2 GB camera splits); VideoTagger merges them into one continuous timeline via FFmpeg automatically
 - **Tag clips** — press `I` to mark start, `O` to mark end; assign a category and label
 - **Timeline view** — colour-coded clip markers with clickable seek
 - **Tag Manager** — create/rename/delete categories and labels; save and load templates
 - **Built-in AFL template** — Offence, Defence, Stoppages, General (with labels pre-filled)
 - **Playlists** — build and reorder clip playlists; add clips via right-click context menu
-- **Presentation mode** — full-screen playlist playback with HUD overlay, auto-advance between clips
+- **Presentation mode** — full-screen playlist playback with HUD overlay, drawing tools, auto-advance between clips
 - **Export** — cut clips to individual `.mp4` files and/or generate a CMX 3600 `.edl` reference file
-- **Project files** — save/load `.vtp` project files (plain JSON) for easy team sharing
+- **Project files** — save/load `.vtp` files (plain JSON) for easy team sharing, or package into a self-contained folder for portability
 
 ---
 
 ## Keyboard Shortcuts
+
+### Main Window
 
 | Key | Action |
 |-----|--------|
@@ -85,16 +82,31 @@ VideoTagger uses VLC for video playback on macOS. Download and install it from:
 | `Left / Right` | Step ±5 seconds |
 | `Shift+Left / Right` | Step ±1 frame (~0.04 s) |
 | `[` / `]` | Decrease / increase playback speed |
-| `F11` | Toggle presentation mode (when in presentation window) |
 | `Ctrl+N` | New project |
 | `Ctrl+O` | Open project |
 | `Ctrl+S` | Save project |
+
+### Presentation Mode
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Next clip |
+| `Shift+Tab` | Previous clip |
+| `Space` | Pause / Play |
+| `Left / Right` | Step ±5 seconds within clip |
+| `,` / `.` | Step one frame back / forward |
+| `[` / `]` | Decrease / increase playback speed |
+| `D` | Toggle freehand drawing overlay |
+| `C` | Clear drawing (in draw mode) |
+| `K` | Cycle pen colour (in draw mode) |
+| `N` | Pin / unpin clip notes |
+| `Escape` / `F11` | Exit presentation |
 
 ---
 
 ## Tagging Workflow
 
-1. **File → New Project** — select a video file and optionally choose a tag template.
+1. **File → New Project** — select one or more video files (e.g. multiple 2 GB camera splits of the same match) and optionally choose a tag template. If multiple files are selected, VideoTagger merges them into a single playback file via FFmpeg before opening.
 2. Click a label in the **Tag Panel** to pre-select it (optional).
 3. Press `I` at the moment you want the clip to start.
 4. Press `O` at the moment you want the clip to end — the **New Clip** dialog opens.
@@ -116,17 +128,21 @@ Both options can be selected simultaneously.
 
 ## Presentation Mode
 
-Right-click a playlist and choose **Present**. The window goes full-screen and plays each clip in order with a 1-second gap between them. A HUD overlay shows the playlist name, current category/label, and clip counter.
+Right-click a playlist and choose **Present**. The window goes full-screen and plays each clip in order with a gap between them. A HUD overlay shows the playlist name, current category/label, and clip counter.
 
 - Move the mouse to reveal the HUD controls.
-- Use `Space`, `Left`, `Right` or the on-screen buttons to navigate.
+- Use `Tab` / `Shift+Tab` to jump to the next or previous clip at any time.
+- Use `Space` or the on-screen buttons to pause/play.
+- Press `D` to enable the freehand drawing overlay — draw directly on the video with the mouse.
 - Press `Escape` or `F11` to exit.
 
 ---
 
 ## Project Files
 
-Projects are saved as `.vtp` files (plain JSON). Share them with teammates — they just need the same video file accessible at the same path (or VideoTagger will prompt to locate it on open).
+Projects are saved as `.vtp` files (plain JSON). Share them with teammates — they need the same video file (or merged file) accessible locally; VideoTagger will prompt to locate it on open.
+
+**Packaging:** Use **File → Package Project...** to bundle the project file and video into a self-contained folder. Useful for archiving or sending to someone who doesn't have the match footage.
 
 ---
 
@@ -148,7 +164,6 @@ The workflow builds `VideoTagger.exe` (Windows) and `VideoTagger.dmg` (macOS) in
 ### Prerequisites
 
 - Python 3.9+
-- [VLC media player](https://www.videolan.org/) installed
 - `ffmpeg` / `ffmpeg.exe` in the project root (embedded in the output binary)
 
 ### Install dependencies
@@ -182,7 +197,6 @@ Output: `dist/VideoTagger.exe`
 ### Build (macOS)
 
 ```bash
-brew install --cask vlc
 brew install ffmpeg create-dmg
 cp $(which ffmpeg) ./ffmpeg
 python build.py
