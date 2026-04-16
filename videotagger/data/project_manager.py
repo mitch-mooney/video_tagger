@@ -1,5 +1,7 @@
 import json
+import os
 from videotagger.models.project import Project, project_to_dict, project_from_dict
+
 
 class ProjectManager:
     @staticmethod
@@ -16,4 +18,17 @@ class ProjectManager:
             raise FileNotFoundError(f"Project file not found: {path}")
         except json.JSONDecodeError as e:
             raise ValueError(f"Corrupt project file ({path}): {e}")
-        return project_from_dict(data)
+
+        project = project_from_dict(data)
+
+        # Resolve relative paths against the .vtp file's directory
+        vtp_dir = os.path.dirname(os.path.abspath(path))
+        if not os.path.isabs(project.merged_video_path):
+            project.merged_video_path = os.path.normpath(
+                os.path.join(vtp_dir, project.merged_video_path)
+            )
+        project.source_video_paths = [
+            os.path.normpath(os.path.join(vtp_dir, p)) if not os.path.isabs(p) else p
+            for p in project.source_video_paths
+        ]
+        return project
