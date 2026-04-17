@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v2.0.1] — 2026-04-17
+
+### Fixed
+- **macOS build** — app icon converted from PNG to ICNS at CI build time; PyInstaller no longer rejects the icon on macOS
+- **CI builds on master** — GitHub Actions now triggers a build on every push to `master` so failures are caught before tagging a release
+
+---
+
 ## [v2.0.0] — 2026-04-17
 
 ### Added
