@@ -73,6 +73,18 @@ jobs:
       - name: Install Python dependencies
         run: pip install PyQt6 pyinstaller
 
+      - name: Convert icon PNG to ICNS
+        run: |
+          mkdir -p AppIcon.iconset
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size videotagger/resources/logo.png --out AppIcon.iconset/icon_${size}x${size}.png
+          done
+          sips -z 32 32   videotagger/resources/logo.png --out AppIcon.iconset/icon_16x16@2x.png
+          sips -z 64 64   videotagger/resources/logo.png --out AppIcon.iconset/icon_32x32@2x.png
+          sips -z 256 256 videotagger/resources/logo.png --out AppIcon.iconset/icon_128x128@2x.png
+          sips -z 512 512 videotagger/resources/logo.png --out AppIcon.iconset/icon_256x256@2x.png
+          iconutil -c icns AppIcon.iconset --output videotagger/resources/logo.icns
+
       - name: Build .app
         run: python -m PyInstaller --clean VideoTagger.spec
 

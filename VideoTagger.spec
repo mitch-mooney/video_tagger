@@ -74,6 +74,11 @@ if sys.platform == 'win32':
 
 # ── macOS: .app bundle ────────────────────────────────────────────────────────
 elif sys.platform == 'darwin':
+    _icon = (
+        'videotagger/resources/logo.icns'
+        if Path('videotagger/resources/logo.icns').exists()
+        else None
+    )
     exe = EXE(
         pyz,
         a.scripts,
@@ -84,7 +89,7 @@ elif sys.platform == 'darwin':
         strip=False,
         upx=False,
         console=False,
-        icon='videotagger/resources/logo.png',
+        icon=_icon,
     )
     coll = COLLECT(
         exe,
@@ -97,7 +102,7 @@ elif sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='VideoTagger.app',
-        icon='videotagger/resources/logo.png',
+        icon=_icon,
         bundle_identifier='com.cheapstats.videotagger',
         info_plist={
             'CFBundleName': 'VideoTagger',
