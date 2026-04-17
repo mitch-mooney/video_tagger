@@ -12,7 +12,18 @@ else:
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=[],
+    binaries=(
+        # Windows: only the WMF backend — ffmpegmediaplugin.dll ships without its
+        # FFmpeg DLL dependencies and fails to load, causing Qt to find no backends.
+        [('.venv/lib/site-packages/PyQt6/Qt6/plugins/multimedia/windowsmediaplugin.dll',
+          'PyQt6/Qt6/plugins/multimedia')]
+        if sys.platform == 'win32' else
+        # macOS: AVFoundation backend; discovered at build time from the active venv.
+        [(str(Path(__import__('PyQt6').__file__).parent /
+              'Qt6' / 'plugins' / 'multimedia' / 'libqdarwinmediaplugin.dylib'),
+          'PyQt6/Qt6/plugins/multimedia')]
+        if sys.platform == 'darwin' else []
+    ),
     datas=[
         ('videotagger/resources', 'videotagger/resources'),
     ] + ffmpeg_datas,

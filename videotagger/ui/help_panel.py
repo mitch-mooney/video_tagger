@@ -5,24 +5,31 @@ HELP_HTML = """
 <html>
 <head>
 <style>
-  body { font-family: 'Segoe UI', sans-serif; font-size: 9pt;
-         color: #dde3ea; background: #090d12; margin: 12px 16px; line-height: 1.7; }
-  h2   { color: #00b09b; font-size: 11pt; margin: 18px 0 6px 0;
-         border-bottom: 1px solid #1e2a38; padding-bottom: 4px; }
-  h3   { color: #7dcfc8; font-size: 9.5pt; margin: 14px 0 4px 0; }
-  p    { margin: 4px 0 8px 0; color: #b8c6d4; }
-  code { background: #1e2a38; color: #00d4b8; padding: 1px 5px;
-         border-radius: 3px; font-family: Consolas, monospace; font-size: 8.5pt; }
-  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-  th   { background: #090d12; color: #7d8fa3; text-align: left;
-         padding: 5px 10px; border-bottom: 1px solid #1e2a38;
-         font-size: 8pt; letter-spacing: 0.6px; text-transform: uppercase; }
-  td   { padding: 5px 10px; border-bottom: 1px solid #1a2434; color: #b8c6d4; }
-  td:first-child { color: #00b09b; font-family: Consolas, monospace;
-                   font-size: 8.5pt; white-space: nowrap; }
-  tr:hover td { background: #1a2b3c; }
-  .tip { background: #0f3460; border-left: 3px solid #00b09b;
-         padding: 6px 10px; margin: 8px 0; border-radius: 0 4px 4px 0; }
+  body { font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+         font-size: 9pt; color: #c8d8e8; background: #060911;
+         margin: 14px 18px; line-height: 1.75; }
+  h2   { color: #00b09b; font-size: 10.5pt; font-weight: 700;
+         margin: 20px 0 6px 0; border-bottom: 1px solid #141e2e;
+         padding-bottom: 5px; letter-spacing: 0.3px; }
+  h3   { color: #5ab8b0; font-size: 9pt; font-weight: 600;
+         margin: 14px 0 4px 0; text-transform: uppercase;
+         letter-spacing: 0.7px; font-size: 8pt; }
+  p    { margin: 4px 0 10px 0; color: #8499b0; }
+  code { background: #0a1422; color: #00d4b8; padding: 1px 6px;
+         border-radius: 4px; border: 1px solid #1a2840;
+         font-family: 'Cascadia Code', Consolas, monospace; font-size: 8pt; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
+  th   { background: #060911; color: #364e64; text-align: left;
+         padding: 6px 10px; border-bottom: 1px solid #141e2e;
+         font-size: 7.5pt; letter-spacing: 1px; text-transform: uppercase;
+         font-weight: 700; }
+  td   { padding: 6px 10px; border-bottom: 1px solid #0e1622; color: #8499b0; }
+  td:first-child { color: #00b09b; font-family: 'Cascadia Code', Consolas, monospace;
+                   font-size: 8pt; white-space: nowrap; }
+  tr:hover td { background: #0b1420; }
+  .tip { background: #091624; border-left: 3px solid #00b09b;
+         padding: 8px 12px; margin: 10px 0; border-radius: 0 5px 5px 0;
+         color: #8ab8b0; }
 </style>
 </head>
 <body>

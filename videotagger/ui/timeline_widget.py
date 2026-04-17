@@ -47,42 +47,73 @@ class TimelineWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
-        painter.fillRect(0, 0, w, h, QColor("#1a1a2e"))
+
+        # Background
+        painter.fillRect(0, 0, w, h, QColor("#060911"))
+
+        # Subtle top/bottom edge lines
+        painter.setPen(QPen(QColor("#0f1828"), 1))
+        painter.drawLine(0, 0, w, 0)
+        painter.drawLine(0, h - 1, w, h - 1)
 
         if self._duration <= 0 or not self._project:
             painter.end()
             return
 
-        track_y = h // 2 - 6
-        track_h = 12
-        painter.fillRect(0, track_y, w, track_h, QColor("#0f3460"))
+        track_y = h // 2 - 7
+        track_h = 14
+
+        # Track background with subtle gradient feel (two-tone)
+        painter.fillRect(0, track_y, w, track_h, QColor("#0b1422"))
+        painter.fillRect(0, track_y, w, 1, QColor("#141e2e"))
+        painter.fillRect(0, track_y + track_h - 1, w, 1, QColor("#141e2e"))
 
         cat_map = {c.id: c for c in self._project.categories}
         for clip in self._project.clips:
             x1 = int(clip.start / self._duration * w)
             x2 = int(clip.end / self._duration * w)
+            clip_w = max(2, x2 - x1)
             cat = cat_map.get(clip.category_id)
-            color = QColor(cat.color if cat else "#888888")
+            color = QColor(cat.color if cat else "#557799")
 
             matches = self._clip_matches(clip, cat_map)
             if self._filter and not matches:
-                color.setAlphaF(0.2)  # dim non-matching clips
+                color.setAlphaF(0.15)
+            else:
+                color.setAlphaF(0.92)
 
-            painter.fillRect(x1, track_y, max(2, x2 - x1), track_h, color)
+            painter.fillRect(x1, track_y + 1, clip_w, track_h - 2, color)
 
-            # Draw a small dot above clip if it has notes
+            # Bright top edge highlight on each clip
+            highlight = QColor(color)
+            highlight.setAlphaF(0.5 if (self._filter and not matches) else 1.0)
+            painter.fillRect(x1, track_y + 1, clip_w, 1, highlight)
+
+            # Notes dot above the track
             if clip.notes and clip.notes.strip():
-                dot_x = x1 + max(1, (x2 - x1) // 2)
-                dot_color = QColor("#ffffff") if matches or not self._filter else QColor("#555555")
+                dot_x = x1 + max(1, clip_w // 2)
+                dot_color = QColor("#00b09b") if (matches or not self._filter) else QColor("#1a3040")
                 painter.setBrush(dot_color)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawEllipse(dot_x - 2, track_y - 5, 4, 4)
 
-        # Playhead
+        # Playhead — accent color with subtle glow line
         px = int(self._position / self._duration * w)
-        pen = QPen(QColor("white"), 2)
-        painter.setPen(pen)
+        painter.setPen(QPen(QColor("#00b09b"), 1))
         painter.drawLine(px, 0, px, h)
+        # Bright centre pixel
+        painter.setPen(QPen(QColor("#00d4b8"), 1))
+        painter.drawLine(px, track_y - 2, px, track_y + track_h + 2)
+        # Playhead triangle indicator at top
+        painter.setBrush(QColor("#00b09b"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        pts = [
+            QPoint(px - 4, 0),
+            QPoint(px + 4, 0),
+            QPoint(px, 6),
+        ]
+        from PyQt6.QtGui import QPolygon
+        painter.drawPolygon(QPolygon(pts))
 
         painter.end()
 

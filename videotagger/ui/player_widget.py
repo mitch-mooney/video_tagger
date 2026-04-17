@@ -16,8 +16,8 @@ class PlayerWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._duration = 0.0
-        self._player = QMediaPlayer()
-        self._audio = QAudioOutput()
+        self._player = QMediaPlayer(self)
+        self._audio = QAudioOutput(self)
         self._player.setAudioOutput(self._audio)
         self._setup_ui()
         self._player.positionChanged.connect(self._on_position_changed)
@@ -29,34 +29,42 @@ class PlayerWidget(QWidget):
         layout.setSpacing(2)
 
         self._video_widget = QVideoWidget()
-        self._video_widget.setStyleSheet("background: black;")
         self._video_widget.setMinimumHeight(200)
         self._player.setVideoOutput(self._video_widget)
+        # Force native HWND creation so the video renderer has a valid surface.
+        self._video_widget.winId()
         layout.addWidget(self._video_widget, stretch=1)
 
         ctrl_widget = QWidget()
-        ctrl_widget.setStyleSheet("background: #090d12; border-top: 1px solid #1e2a38;")
-        ctrl_widget.setFixedHeight(36)
+        ctrl_widget.setStyleSheet(
+            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            "stop:0 #080c14, stop:1 #060911);"
+            "border-top: 1px solid #141e2e;"
+        )
+        ctrl_widget.setFixedHeight(42)
         ctrl = QHBoxLayout(ctrl_widget)
-        ctrl.setContentsMargins(8, 0, 8, 0)
-        ctrl.setSpacing(8)
+        ctrl.setContentsMargins(10, 0, 10, 0)
+        ctrl.setSpacing(10)
 
         self._play_btn = QPushButton("▶")
-        self._play_btn.setFixedSize(32, 26)
+        self._play_btn.setFixedSize(34, 28)
         self._play_btn.setStyleSheet(
             "QPushButton { background: #00b09b; color: #000; border: none;"
-            " border-radius: 4px; font-size: 11pt; font-weight: bold; }"
+            " border-radius: 14px; font-size: 10pt; font-weight: bold; }"
             "QPushButton:hover { background: #00d4b8; }"
             "QPushButton:pressed { background: #008f7e; }"
         )
         self._play_btn.clicked.connect(self.toggle_play)
         ctrl.addWidget(self._play_btn)
 
-        mono = QFont("Consolas", 9)
+        mono = QFont("Cascadia Code", 8)
+        mono.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+
         self._pos_label = QLabel("00:00:00")
         self._pos_label.setFont(mono)
         self._pos_label.setStyleSheet(
-            "color: #00b09b; background: transparent; min-width: 58px;"
+            "color: #00b09b; background: transparent; min-width: 60px;"
+            "letter-spacing: 0.5px;"
         )
         ctrl.addWidget(self._pos_label)
 
@@ -68,15 +76,17 @@ class PlayerWidget(QWidget):
         self._dur_label = QLabel("00:00:00")
         self._dur_label.setFont(mono)
         self._dur_label.setStyleSheet(
-            "color: #7d8fa3; background: transparent; min-width: 58px;"
+            "color: #4d6880; background: transparent; min-width: 60px;"
+            "letter-spacing: 0.5px;"
         )
         ctrl.addWidget(self._dur_label)
 
         self._speed_label = QLabel("1.0×")
-        self._speed_label.setFixedWidth(44)
+        self._speed_label.setFixedWidth(46)
+        self._speed_label.setFont(mono)
         self._speed_label.setStyleSheet(
-            "color: #7d8fa3; background: #13191f; border: 1px solid #1e2a38;"
-            " border-radius: 3px; padding: 1px 4px; font-size: 8pt;"
+            "color: #4d6880; background: #0a0f1a; border: 1px solid #1a2840;"
+            " border-radius: 4px; padding: 2px 5px; font-size: 8pt;"
         )
         ctrl.addWidget(self._speed_label)
 

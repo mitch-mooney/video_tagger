@@ -55,21 +55,23 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Logo header strip ──────────────────────────────────────────
+        # ── Header ────────────────────────────────────────────────────
         header = QWidget()
-        header.setFixedHeight(48)
+        header.setFixedHeight(52)
         header.setStyleSheet(
-            "background: #090d12; border-bottom: 1px solid #1e2a38;"
+            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            "stop:0 #0a0f1a, stop:1 #060911);"
+            "border-bottom: 1px solid #141e2e;"
         )
         header_row = QHBoxLayout(header)
-        header_row.setContentsMargins(10, 0, 16, 0)
+        header_row.setContentsMargins(14, 0, 16, 0)
         header_row.setSpacing(10)
 
         logo_path = self._resource_path("logo.png")
         if logo_path:
             logo_lbl = QLabel()
             pix = QPixmap(logo_path).scaledToHeight(
-                36, Qt.TransformationMode.SmoothTransformation
+                32, Qt.TransformationMode.SmoothTransformation
             )
             logo_lbl.setPixmap(pix)
             logo_lbl.setStyleSheet("background: transparent;")
@@ -77,15 +79,25 @@ class MainWindow(QMainWindow):
 
         self._title_label = QLabel("VideoTagger")
         self._title_label.setStyleSheet(
-            "background: transparent; color: #dde3ea;"
-            "font-size: 13pt; font-weight: 700; letter-spacing: 1px;"
+            "background: transparent; color: #e2ecf6;"
+            "font-size: 13pt; font-weight: 700; letter-spacing: 0.5px;"
         )
         header_row.addWidget(self._title_label)
+
+        version_badge = QLabel("v2.0")
+        version_badge.setStyleSheet(
+            "background: #0d2030; color: #00b09b;"
+            "font-size: 7pt; font-weight: 700; letter-spacing: 1px;"
+            "border: 1px solid #003d4f; border-radius: 3px;"
+            "padding: 1px 6px;"
+        )
+        header_row.addWidget(version_badge)
         header_row.addStretch()
 
         self._file_label = QLabel("")
         self._file_label.setStyleSheet(
-            "background: transparent; color: #7d8fa3; font-size: 8pt;"
+            "background: transparent; color: #4d6880; font-size: 8pt;"
+            "font-family: 'Cascadia Code', 'Consolas', monospace;"
         )
         header_row.addWidget(self._file_label)
         layout.addWidget(header)
@@ -418,13 +430,28 @@ class MainWindow(QMainWindow):
     def _on_present_requested(self, playlist_id: str):
         from videotagger.ui.presentation_window import PresentationWindow
         from videotagger.core.playlist_builder import PlaylistBuilder
+        pl = next((p for p in self._project.playlists if p.id == playlist_id), None)
+        if pl is None:
+            return
         clips = PlaylistBuilder(self._project).get_clips(playlist_id)
-        pl = next(p for p in self._project.playlists if p.id == playlist_id)
         category_map = {cat.id: cat.name for cat in self._project.categories}
+        # Cleanly destroy any previous presentation window before creating a new
+        # one — the old QMediaPlayer must be stopped before its parent widget is
+        # garbage-collected, otherwise Qt's C++ layer crashes.
+        if hasattr(self, '_presentation') and self._presentation is not None:
+            self._presentation.close()
+            self._presentation.deleteLater()
+            self._presentation = None
         self._presentation = PresentationWindow(
             self._project.merged_video_path, clips, pl.name, category_map, self
         )
+        self._presentation.closed.connect(self._on_presentation_closed)
         self._presentation.showFullScreen()
+
+    def _on_presentation_closed(self):
+        if self._presentation is not None:
+            self._presentation.deleteLater()
+            self._presentation = None
 
     def _import_timestamps(self):
         if not self._project:
