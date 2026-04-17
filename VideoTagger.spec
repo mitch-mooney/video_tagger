@@ -1,7 +1,9 @@
 # VideoTagger.spec  — cross-platform (Windows + macOS)
 import sys
 from pathlib import Path
+from glob import glob
 
+# ── FFmpeg ──────────────────────────────────────────────────────────────────
 if sys.platform == 'win32':
     ffmpeg_datas = [('ffmpeg.exe', '.')] if Path('ffmpeg.exe').exists() else []
 elif sys.platform == 'darwin':
@@ -9,21 +11,33 @@ elif sys.platform == 'darwin':
 else:
     ffmpeg_datas = []
 
+# ── QtMultimedia backend plugins ─────────────────────────────────────────────
+# Discover the PyQt6 package directory at build time so this works regardless
+# of venv location, system Python, or CI runner paths.
+_pyqt6_dir = Path(__import__('PyQt6').__file__).parent
+_mm_dir = _pyqt6_dir / 'Qt6' / 'plugins' / 'multimedia'
+
+if sys.platform == 'win32':
+    # Use only the WMF backend — ffmpegmediaplugin.dll ships without its
+    # FFmpeg DLL dependencies and fails to load at runtime.
+    _win_plugin = _mm_dir / 'windowsmediaplugin.dll'
+    platform_binaries = (
+        [(str(_win_plugin), 'PyQt6/Qt6/plugins/multimedia')]
+        if _win_plugin.exists() else []
+    )
+elif sys.platform == 'darwin':
+    # Include all .dylib files found in the multimedia plugin directory.
+    platform_binaries = [
+        (p, 'PyQt6/Qt6/plugins/multimedia')
+        for p in glob(str(_mm_dir / '*.dylib'))
+    ]
+else:
+    platform_binaries = []
+
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=(
-        # Windows: only the WMF backend — ffmpegmediaplugin.dll ships without its
-        # FFmpeg DLL dependencies and fails to load, causing Qt to find no backends.
-        [('.venv/lib/site-packages/PyQt6/Qt6/plugins/multimedia/windowsmediaplugin.dll',
-          'PyQt6/Qt6/plugins/multimedia')]
-        if sys.platform == 'win32' else
-        # macOS: AVFoundation backend; discovered at build time from the active venv.
-        [(str(Path(__import__('PyQt6').__file__).parent /
-              'Qt6' / 'plugins' / 'multimedia' / 'libqdarwinmediaplugin.dylib'),
-          'PyQt6/Qt6/plugins/multimedia')]
-        if sys.platform == 'darwin' else []
-    ),
+    binaries=platform_binaries,
     datas=[
         ('videotagger/resources', 'videotagger/resources'),
     ] + ffmpeg_datas,

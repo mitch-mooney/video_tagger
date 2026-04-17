@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'          # trigger on version tags: v2.0.0, v2.1.0, etc.
+    branches:
+      - master        # build (no release) on every push to master
   workflow_dispatch:  # allow manual trigger from GitHub UI
 
 jobs:
