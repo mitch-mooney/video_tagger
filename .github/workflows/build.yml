@@ -3,11 +3,11 @@ name: Build
 on:
   push:
     tags:
-      - 'v*'          # trigger on version tags: v1.0.0, v1.1.0, etc.
+      - 'v*'          # trigger on version tags: v2.0.0, v2.1.0, etc.
   workflow_dispatch:  # allow manual trigger from GitHub UI
 
 jobs:
-  # ── Windows ──────────────────────────────────────────────────────────────────
+  # ── Windows ────────────────────────────────────────────────────────────────
   build-windows:
     runs-on: windows-latest
     steps:
@@ -16,21 +16,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
-
-      - name: Install VLC
-        run: choco install vlc -y
-        shell: pwsh
+          python-version: '3.11'
 
       - name: Install Python dependencies
-        run: pip install PyQt6==6.7.1 python-vlc pyinstaller
+        run: |
+          pip install PyQt6==6.7.1 PyQt6-Qt6==6.7.1 pyinstaller
+        shell: pwsh
 
       - name: Download ffmpeg
         run: |
           python -c "
           import urllib.request, zipfile, io
           url = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
-          with urllib.request.urlopen(url, timeout=120) as r:
+          print('Downloading ffmpeg...')
+          with urllib.request.urlopen(url, timeout=180) as r:
               data = r.read()
           with zipfile.ZipFile(io.BytesIO(data)) as z:
               for name in z.namelist():
@@ -40,18 +39,20 @@ jobs:
                       break
           print('ffmpeg.exe ready')
           "
+        shell: pwsh
 
       - name: Build exe
         run: python -m PyInstaller --clean VideoTagger.spec
+        shell: pwsh
 
-      - name: Upload Windows exe
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: VideoTagger-Windows
           path: dist/VideoTagger.exe
           retention-days: 30
 
-  # ── macOS ─────────────────────────────────────────────────────────────────────
+  # ── macOS ───────────────────────────────────────────────────────────────────
   build-macos:
     runs-on: macos-latest
     steps:
@@ -62,15 +63,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install VLC and ffmpeg
+      - name: Install ffmpeg
         run: |
-          brew install --cask vlc
           brew install ffmpeg
-          # Copy ffmpeg binary into project root for bundling
           cp $(which ffmpeg) ./ffmpeg
 
       - name: Install Python dependencies
-        run: pip install PyQt6 python-vlc pyinstaller Pillow
+        run: pip install PyQt6 pyinstaller
 
       - name: Build .app
         run: python -m PyInstaller --clean VideoTagger.spec
@@ -87,14 +86,14 @@ jobs:
             dist/VideoTagger.dmg \
             dist/VideoTagger.app
 
-      - name: Upload macOS dmg
+      - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: VideoTagger-macOS
           path: dist/VideoTagger.dmg
           retention-days: 30
 
-  # ── GitHub Release (on tag push only) ────────────────────────────────────────
+  # ── GitHub Release (on tag push only) ──────────────────────────────────────
   release:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
@@ -102,6 +101,26 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${{ github.ref_name }}"
+          # Pull the section for this tag out of CHANGELOG.md.
+          # Captures everything between "## [vX.Y.Z]" and the next "## [" heading.
+          awk -v ver="$VERSION" '
+            $0 ~ ("^## \\[" ver "\\]") { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          # Fail loudly if the section was empty (tag not in CHANGELOG)
+          if [ ! -s release_notes.md ]; then
+            echo "ERROR: No CHANGELOG entry found for $VERSION"
+            exit 1
+          fi
+          echo "--- Release notes preview ---"
+          cat release_notes.md
+
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -117,38 +136,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: "VideoTagger ${{ github.ref_name }}"
+          body_path: release_notes.md
           files: |
             artifacts/windows/VideoTagger.exe
             artifacts/macos/VideoTagger.dmg
-          body: |
-            ## Installation
-
-            ### Windows
-            1. Download **VideoTagger.exe** below.
-            2. Double-click to run — no installation required.
-            > ffmpeg is bundled inside the exe, nothing else needed.
-
-            ---
-
-            ### macOS
-            1. Download **VideoTagger.dmg** below.
-            2. Open the `.dmg` and drag **VideoTagger** into your **Applications** folder.
-            3. Install [VLC media player](https://www.videolan.org/vlc/) if you haven't already (required for video playback).
-
-            **First launch — bypass the unsigned app warning:**
-
-            macOS will block the app because it is not signed with a paid Apple Developer certificate.
-            To open it anyway, choose one of these methods:
-
-            **Option A (easiest):** In Finder → Applications, **right-click** VideoTagger → **Open** → click **Open** in the dialog. You only need to do this once.
-
-            **Option B (terminal):**
-            ```bash
-            xattr -rd com.apple.quarantine /Applications/VideoTagger.app
-            ```
-            Then double-click normally to launch.
-
-            ---
-
-            ### Sharing projects with teammates
-            Save your project as a `.vtp` file (**Ctrl+S**) and share it — teammates need the same video file at the same path, or VideoTagger will prompt them to locate it.
