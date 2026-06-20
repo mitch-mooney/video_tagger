@@ -93,3 +93,14 @@ def test_player_widget_has_zoom(qtbot):
     assert w._zoom_view._zoom > 1.0
     w.reset_zoom()
     assert w._zoom_view._zoom == 1.0
+
+
+def test_main_window_zoom_shortcuts(qtbot):
+    from PyQt6.QtGui import QShortcut
+    from videotagger.ui.main_window import MainWindow
+    win = MainWindow()
+    qtbot.addWidget(win)
+    keys = {sc.key().toString() for sc in win.findChildren(QShortcut)}
+    assert "0" in keys
+    assert "-" in keys
+    assert ("+" in keys) or ("=" in keys)

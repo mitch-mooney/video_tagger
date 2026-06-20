@@ -344,6 +344,10 @@ class MainWindow(QMainWindow):
         QShortcut("]", self).activated.connect(
             lambda: self.player.set_rate(min(4.0, self.player.get_rate() + 0.25))
         )
+        QShortcut("+", self).activated.connect(self.player.zoom_in)
+        QShortcut("=", self).activated.connect(self.player.zoom_in)
+        QShortcut("-", self).activated.connect(self.player.zoom_out)
+        QShortcut("0", self).activated.connect(self.player.reset_zoom)
         QShortcut("Escape", self).activated.connect(self._cancel_mark)
         QShortcut("Ctrl+Z", self).activated.connect(self._undo_last_clip)
         QShortcut("F11", self).activated.connect(self._toggle_presentation)
