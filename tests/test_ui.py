@@ -104,3 +104,17 @@ def test_main_window_zoom_shortcuts(qtbot):
     assert "0" in keys
     assert "-" in keys
     assert ("+" in keys) or ("=" in keys)
+
+
+def test_presentation_window_zoom_resets_on_clip(qtbot):
+    from videotagger.ui.presentation_window import PresentationWindow
+    from videotagger.ui.zoomable_video_view import ZoomableVideoView
+    from videotagger.models.project import Clip
+    clip = Clip(category_id="c1", label="Goal", start=1.0, end=2.0)
+    w = PresentationWindow("video.mp4", [clip], "Test Playlist")
+    qtbot.addWidget(w)
+    assert isinstance(w._zoom_view, ZoomableVideoView)
+    # Simulate a user-applied zoom, then advancing to a clip resets it.
+    w._zoom_view._zoom = 2.0
+    w._play_clip(0)
+    assert w._zoom_view._zoom == 1.0

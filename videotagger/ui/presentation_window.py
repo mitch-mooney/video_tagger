@@ -5,7 +5,7 @@ from typing import List
 from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QFont, QKeyEvent
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from videotagger.ui.zoomable_video_view import ZoomableVideoView
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from videotagger.models.project import Clip
@@ -38,10 +38,9 @@ class PresentationWindow(QWidget):
     # ── UI setup ──────────────────────────────────────────────────────────
 
     def _setup_ui(self):
-        self._video_widget = QVideoWidget(self)
-        self._video_widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._player.setVideoOutput(self._video_widget)
-        self._video_widget.winId()
+        self._zoom_view = ZoomableVideoView(self)
+        self._zoom_view.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._player.setVideoOutput(self._zoom_view.video_item)
 
         self._pinned_notes = QLabel("", self)
         self._pinned_notes.setStyleSheet(
@@ -126,7 +125,7 @@ class PresentationWindow(QWidget):
         super().resizeEvent(event)
         if not self._ui_ready:
             return
-        self._video_widget.resize(self.size())
+        self._zoom_view.resize(self.size())
         self._hud.resize(self.size())
         self._reposition_hud()
 
@@ -167,6 +166,7 @@ class PresentationWindow(QWidget):
         if not self._clips or index < 0 or index >= len(self._clips):
             return
         self._current_index = index
+        self._zoom_view.reset_zoom()
         clip = self._clips[index]
         self._player.setSource(QUrl.fromLocalFile(self._video_path))
         self._player.play()
@@ -306,6 +306,15 @@ class PresentationWindow(QWidget):
 
         elif key == Qt.Key.Key_N:
             self._toggle_notes_pin()
+
+        elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+            self._zoom_view.zoom_in()
+
+        elif key == Qt.Key.Key_Minus:
+            self._zoom_view.zoom_out()
+
+        elif key == Qt.Key.Key_0:
+            self._zoom_view.reset_zoom()
 
         else:
             super().keyPressEvent(event)
