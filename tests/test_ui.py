@@ -52,3 +52,31 @@ def test_presentation_window_creates(qtbot):
     qtbot.addWidget(w)
     w.show()
     assert w.isVisible()
+
+
+def test_zoomable_video_view_creates(qtbot):
+    from videotagger.ui.zoomable_video_view import ZoomableVideoView
+    from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
+    v = ZoomableVideoView()
+    qtbot.addWidget(v)
+    v.show()
+    assert v.isVisible()
+    assert isinstance(v.video_item, QGraphicsVideoItem)
+
+
+def test_zoomable_video_view_zoom_state(qtbot):
+    from videotagger.ui.zoomable_video_view import ZoomableVideoView
+    v = ZoomableVideoView()
+    qtbot.addWidget(v)
+    # starts at fit
+    v.reset_zoom()
+    assert v._zoom == 1.0
+    assert v.is_zoomed is False
+    # zoom in raises the factor
+    v.zoom_in()
+    assert v._zoom > 1.0
+    assert v.is_zoomed is True
+    # zoom out cannot go below fit
+    v.reset_zoom()
+    v.zoom_out()
+    assert v._zoom == 1.0
