@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from videotagger.ui.zoomable_video_view import ZoomableVideoView
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
@@ -28,12 +28,10 @@ class PlayerWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
-        self._video_widget = QVideoWidget()
-        self._video_widget.setMinimumHeight(200)
-        self._player.setVideoOutput(self._video_widget)
-        # Force native HWND creation so the video renderer has a valid surface.
-        self._video_widget.winId()
-        layout.addWidget(self._video_widget, stretch=1)
+        self._zoom_view = ZoomableVideoView()
+        self._zoom_view.setMinimumHeight(200)
+        self._player.setVideoOutput(self._zoom_view.video_item)
+        layout.addWidget(self._zoom_view, stretch=1)
 
         ctrl_widget = QWidget()
         ctrl_widget.setStyleSheet(
@@ -123,6 +121,15 @@ class PlayerWidget(QWidget):
 
     def get_rate(self) -> float:
         return self._player.playbackRate()
+
+    def zoom_in(self) -> None:
+        self._zoom_view.zoom_in()
+
+    def zoom_out(self) -> None:
+        self._zoom_view.zoom_out()
+
+    def reset_zoom(self) -> None:
+        self._zoom_view.reset_zoom()
 
     # ── Private slots ───────────────────────────────────────────────────
 

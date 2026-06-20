@@ -80,3 +80,16 @@ def test_zoomable_video_view_zoom_state(qtbot):
     v.reset_zoom()
     v.zoom_out()
     assert v._zoom == 1.0
+
+
+def test_player_widget_has_zoom(qtbot):
+    from videotagger.ui.player_widget import PlayerWidget
+    from videotagger.ui.zoomable_video_view import ZoomableVideoView
+    w = PlayerWidget()
+    qtbot.addWidget(w)
+    assert isinstance(w._zoom_view, ZoomableVideoView)
+    w.reset_zoom()
+    w.zoom_in()
+    assert w._zoom_view._zoom > 1.0
+    w.reset_zoom()
+    assert w._zoom_view._zoom == 1.0
