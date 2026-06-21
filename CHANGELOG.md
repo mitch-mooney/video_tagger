@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Audio is now always stripped** from the project working video and all
+  exports (`-an`). Merging source videos produces a video-only file, and both
+  per-clip and merged-playlist exports are silent.
+
 ### Added
 - **Live zoom & pan** in the main player and Presentation Mode — scroll wheel or
   `+` / `-` to zoom (centered on the cursor for the wheel), click-drag to pan, and

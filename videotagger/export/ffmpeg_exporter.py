@@ -61,6 +61,7 @@ def export_clip(clip: Clip, category_name: str, instance: int,
         cmd += ["-vf", _drawtext_filter(notes)]
     else:
         cmd += ["-c", "copy"]
+    cmd += ["-an"]
     cmd.append(output_path)
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -98,13 +99,12 @@ def export_playlist_merged(playlist_clips: List[Clip], project: Project,
     stream_labels = []
     for i, clip in enumerate(playlist_clips):
         filter_parts.append(
-            f"[0:v]trim=start={clip.start}:end={clip.end},setpts=PTS-STARTPTS[v{i}];"
-            f"[0:a]atrim=start={clip.start}:end={clip.end},asetpts=PTS-STARTPTS[a{i}]"
+            f"[0:v]trim=start={clip.start}:end={clip.end},setpts=PTS-STARTPTS[v{i}]"
         )
-        stream_labels.append(f"[v{i}][a{i}]")
+        stream_labels.append(f"[v{i}]")
 
     n = len(playlist_clips)
-    concat_str = "".join(stream_labels) + f"concat=n={n}:v=1:a=1[outv][outa]"
+    concat_str = "".join(stream_labels) + f"concat=n={n}:v=1:a=0[outv]"
 
     # Build per-clip drawtext filters timed to their position in the merged output.
     notes_filters = []
@@ -132,7 +132,7 @@ def export_playlist_merged(playlist_clips: List[Clip], project: Project,
     cmd = [
         _ffmpeg_path(), "-y", "-i", project.merged_video_path,
         "-filter_complex", filter_complex,
-        "-map", video_map, "-map", "[outa]",
+        "-map", video_map, "-an",
         output_path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)

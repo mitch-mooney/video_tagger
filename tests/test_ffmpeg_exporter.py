@@ -26,6 +26,7 @@ def test_export_clip_calls_ffmpeg(tmp_path):
     assert "10.0" in args
     assert "-t" in args
     assert "7.0" in args
+    assert "-an" in args
     output_filename = Path(output).name
     assert output_filename == "video_Offence_Goal_001.mp4"
 

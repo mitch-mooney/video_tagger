@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from typing import Callable, List
@@ -14,7 +13,8 @@ class MergeError(Exception):
 class VideoMerger:
     """Merges multiple video files into one using FFmpeg concat demuxer.
 
-    Tries -c copy (lossless, fast) first. Falls back to H.264/AAC transcode
+    Audio is always stripped (-an): the project working video is video-only.
+    Tries -c copy (lossless, fast) first. Falls back to an H.264 transcode
     if sources have mismatched codecs.
     """
 
@@ -28,37 +28,36 @@ class VideoMerger:
         output: str,
         on_progress: Callable[[str], None] | None = None,
     ) -> None:
-        """Merge sources into output.
+        """Merge sources into output, always stripping audio (-an).
 
-        Single source: copied directly (no FFmpeg needed).
+        Single source: copied (video-only) via FFmpeg.
         Multiple sources: concat demuxer with copy, then H.264 fallback.
         Raises MergeError if FFmpeg fails on both passes.
         """
-        if len(sources) == 1:
-            shutil.copy2(sources[0], output)
-            return
-
-        fd, filelist_path = tempfile.mkstemp(suffix=".txt")
+        filelist_path = None
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                for src in sources:
-                    escaped = src.replace("'", "'\\''")
-                    f.write(f"file '{escaped}'\n")
-
-            base_cmd = [
-                self._ffmpeg, "-y", "-f", "concat", "-safe", "0",
-                "-i", filelist_path,
-            ]
+            if len(sources) == 1:
+                base_cmd = [self._ffmpeg, "-y", "-i", sources[0]]
+            else:
+                fd, filelist_path = tempfile.mkstemp(suffix=".txt")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    for src in sources:
+                        escaped = src.replace("'", "'\\''")
+                        f.write(f"file '{escaped}'\n")
+                base_cmd = [
+                    self._ffmpeg, "-y", "-f", "concat", "-safe", "0",
+                    "-i", filelist_path,
+                ]
 
             if on_progress:
                 on_progress("Merging — pass 1: copy (fast)…")
-            if self._run(base_cmd + ["-c", "copy", output], on_progress):
+            if self._run(base_cmd + ["-c", "copy", "-an", output], on_progress):
                 return
 
             if on_progress:
                 on_progress("Copy pass failed — re-encoding to H.264…")
             if self._run(
-                base_cmd + ["-c:v", "libx264", "-crf", "18", "-c:a", "aac", output],
+                base_cmd + ["-c:v", "libx264", "-crf", "18", "-an", output],
                 on_progress,
             ):
                 return
@@ -68,7 +67,7 @@ class VideoMerger:
                 "Check that all source files are valid and not corrupted."
             )
         finally:
-            if os.path.exists(filelist_path):
+            if filelist_path and os.path.exists(filelist_path):
                 os.unlink(filelist_path)
 
     def cancel(self) -> None:

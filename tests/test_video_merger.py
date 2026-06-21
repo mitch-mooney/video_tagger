@@ -8,13 +8,18 @@ def merger():
     return VideoMerger(ffmpeg_path="ffmpeg")
 
 
-def test_single_file_copies_in_place(tmp_path, merger):
+def test_single_file_strips_audio_via_ffmpeg(tmp_path, merger):
     src = tmp_path / "src.mp4"
     src.write_bytes(b"fake video data")
     dst = tmp_path / "out.mp4"
-    merger.merge([str(src)], str(dst))
-    assert dst.exists()
-    assert dst.read_bytes() == b"fake video data"
+
+    with patch("subprocess.Popen", return_value=_make_mock_proc(0)) as mock_popen:
+        merger.merge([str(src)], str(dst))
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-i" in cmd
+    assert str(src) in cmd
+    assert "-an" in cmd
 
 
 def _make_mock_proc(returncode: int):
@@ -38,6 +43,7 @@ def test_multiple_files_tries_copy_first(tmp_path, merger):
     cmd = mock_popen.call_args[0][0]
     assert "-c" in cmd
     assert "copy" in cmd
+    assert "-an" in cmd
 
 
 def test_falls_back_to_h264_when_copy_fails(tmp_path, merger):
