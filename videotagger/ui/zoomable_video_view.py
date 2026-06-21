@@ -5,7 +5,7 @@ from PyQt6.QtCore import QPointF, QRectF, QSizeF, Qt
 from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
 from PyQt6.QtWidgets import QFrame, QGraphicsScene, QGraphicsView
 
-from videotagger.ui.zoom_geometry import clamp_zoom, recenter_on_point, visible_rect
+from videotagger.ui.zoom_geometry import clamp_zoom, visible_rect
 
 _ZOOM_STEP = 1.25
 
@@ -98,19 +98,24 @@ class ZoomableVideoView(QGraphicsView):
         s = self._frame_size()
         if s.width() <= 0:
             return
-        vp = self.viewport()
-        scene_pt = self.mapToScene(event.position().toPoint())
-        norm_x = event.position().x() / max(1, vp.width())
-        norm_y = event.position().y() / max(1, vp.height())
+        event.accept()
         old = self._zoom
         factor = _ZOOM_STEP if event.angleDelta().y() > 0 else 1.0 / _ZOOM_STEP
-        self._zoom = clamp_zoom(old * factor)
-        if self._zoom != old:
-            cx, cy = recenter_on_point(
-                scene_pt.x(), scene_pt.y(), norm_x, norm_y,
-                s.width(), s.height(), self._zoom,
-            )
-            self._center = QPointF(cx, cy)
+        new = clamp_zoom(old * factor)
+        if new == old:
+            return
+        # Keep the frame point under the cursor anchored. mapToScene/mapFromScene
+        # account for the actual fitted transform (including letterbox bars), so
+        # this stays correct regardless of the view's aspect ratio.
+        pos = event.position().toPoint()
+        scene_before = self.mapToScene(pos)
+        self._zoom = new
+        self._update_view()
+        scene_after = self.mapToScene(pos)
+        self._center = QPointF(
+            self._center.x() + (scene_before.x() - scene_after.x()),
+            self._center.y() + (scene_before.y() - scene_after.y()),
+        )
         self._update_view()
 
     def mousePressEvent(self, event):
@@ -121,9 +126,10 @@ class ZoomableVideoView(QGraphicsView):
 
     def mouseMoveEvent(self, event):
         if self._pan_last is not None:
-            s = self._frame_size()
-            vw = max(1, self.viewport().width())
-            scene_per_px = (s.width() / self._zoom) / vw
+            # Derive scene-units-per-pixel from the actual fitted scale (m11 == m22
+            # under KeepAspectRatio), which is letterbox-correct on any aspect ratio.
+            scale = self.transform().m11()
+            scene_per_px = 1.0 / scale if scale else 0.0
             d = event.position() - self._pan_last
             self._center = QPointF(
                 self._center.x() - d.x() * scene_per_px,

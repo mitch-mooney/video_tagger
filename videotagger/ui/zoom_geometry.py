@@ -29,17 +29,3 @@ def visible_rect(center_x: float, center_y: float,
     x = min(max(center_x - w / 2.0, 0.0), frame_w - w)
     y = min(max(center_y - h / 2.0, 0.0), frame_h - h)
     return (x, y, w, h)
-
-
-def recenter_on_point(point_x: float, point_y: float,
-                      norm_x: float, norm_y: float,
-                      frame_w: float, frame_h: float, zoom: float) -> tuple:
-    """Compute the new center so that the frame point (point_x, point_y) stays
-    at normalized viewport position (norm_x, norm_y) in [0,1] after zooming.
-    Used for cursor-centered wheel zoom. Returned center is unclamped — pass it
-    through visible_rect to clamp."""
-    w = frame_w / zoom
-    h = frame_h / zoom
-    center_x = point_x + w * (0.5 - norm_x)
-    center_y = point_y + h * (0.5 - norm_y)
-    return (center_x, center_y)

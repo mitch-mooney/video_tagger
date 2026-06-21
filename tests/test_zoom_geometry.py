@@ -1,6 +1,6 @@
 # tests/test_zoom_geometry.py
 import pytest
-from videotagger.ui.zoom_geometry import clamp_zoom, visible_rect, recenter_on_point
+from videotagger.ui.zoom_geometry import clamp_zoom, visible_rect
 
 
 def test_clamp_zoom_floors_at_one():
@@ -35,16 +35,3 @@ def test_visible_rect_clamps_center_to_left_edge():
 def test_visible_rect_clamps_center_to_bottom_right_edge():
     x, y, w, h = visible_rect(99999.0, 99999.0, 1920.0, 1080.0, 2.0)
     assert (x, y) == (960.0, 540.0)  # rect pinned to bottom-right
-
-
-def test_recenter_on_point_keeps_point_under_cursor_center():
-    # cursor at viewport center (0.5,0.5): center == the scene point itself
-    cx, cy = recenter_on_point(700.0, 400.0, 0.5, 0.5, 1920.0, 1080.0, 2.0)
-    assert (cx, cy) == (700.0, 400.0)
-
-
-def test_recenter_on_point_offsets_for_corner_cursor():
-    # cursor at top-left (0,0): center shifts by +half the visible size
-    # visible width at zoom 2 = 960 -> +480 ; height 540 -> +270
-    cx, cy = recenter_on_point(700.0, 400.0, 0.0, 0.0, 1920.0, 1080.0, 2.0)
-    assert (cx, cy) == (700.0 + 480.0, 400.0 + 270.0)
