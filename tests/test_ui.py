@@ -118,3 +118,21 @@ def test_presentation_window_zoom_resets_on_clip(qtbot):
     w._zoom_view._zoom = 2.0
     w._play_clip(0)
     assert w._zoom_view._zoom == 1.0
+
+
+def test_position_update_during_slider_drag_does_not_reenter_seek(qtbot):
+    # Regression: while the seek slider is being dragged, the slider's internal
+    # "pressed" state makes QSlider.setValue() re-emit sliderMoved. The periodic
+    # programmatic position update must NOT feed back into seek(), or playback
+    # position updates recurse infinitely (RecursionError).
+    from videotagger.ui.player_widget import PlayerWidget
+    w = PlayerWidget()
+    qtbot.addWidget(w)
+    w._duration = 100.0
+    seek_calls = []
+    w.seek = lambda s: seek_calls.append(s)
+    # Emulate an active drag so the slider is "pressed".
+    w._seek_slider.setSliderDown(True)
+    # A playback position update arrives mid-drag (50s of 100s -> value 5000).
+    w._on_position_changed(50_000)
+    assert seek_calls == []

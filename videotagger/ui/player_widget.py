@@ -138,7 +138,12 @@ class PlayerWidget(QWidget):
         self.position_changed.emit(pos)
         self._pos_label.setText(self._fmt(pos))
         if self._duration > 0:
+            # Block signals while following playback: setValue() re-emits
+            # sliderMoved when the slider is pressed (mid-drag), which would feed
+            # back into _seek_to_slider -> seek -> setPosition and recurse.
+            was_blocked = self._seek_slider.blockSignals(True)
             self._seek_slider.setValue(int(pos / self._duration * 10000))
+            self._seek_slider.blockSignals(was_blocked)
 
     def _on_duration_changed(self, ms: int) -> None:
         self._duration = ms / 1000.0
