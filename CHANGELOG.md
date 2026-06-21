@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Live zoom & pan** in the main player and Presentation Mode — scroll wheel or
+  `+` / `-` to zoom (centered on the cursor for the wheel), click-drag to pan, and
+  `0` to reset to the full frame. Useful for inspecting a region of high-resolution
+  (e.g. 4K) footage. Zoom persists while reviewing in the main player; in
+  Presentation Mode it resets to the full frame at the start of each clip.
+
+---
+
 ## [v2.0.1] — 2026-04-17
 
 ### Fixed

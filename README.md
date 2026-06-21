@@ -85,6 +85,9 @@ Then double-click normally to launch.
 | `Left` / `Right` | Step ±5 seconds |
 | `Shift+Left` / `Shift+Right` | Step ±1 frame (~0.04 s) |
 | `[` / `]` | Decrease / increase playback speed |
+| `+` / `-` | Zoom in / out (or scroll wheel over the video) |
+| `0` | Reset zoom to full frame |
+| Click + drag | Pan the zoomed view |
 | `Ctrl+N` | New project |
 | `Ctrl+O` | Open project |
 | `Ctrl+S` | Save project |
@@ -99,6 +102,9 @@ Then double-click normally to launch.
 | `Left` / `Right` | Step ±5 seconds within clip |
 | `,` / `.` | Step one frame back / forward |
 | `[` / `]` | Decrease / increase playback speed |
+| `+` / `-` | Zoom in / out (or scroll wheel over the video) |
+| `0` | Reset zoom to full frame |
+| Click + drag | Pan the zoomed view |
 | `N` | Pin / unpin clip notes overlay |
 | `Escape` / `F11` | Exit presentation |
 
