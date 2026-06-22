@@ -149,7 +149,17 @@ def build(cfg):
     master = master[max(0, ys.min() - pad):min(H, ys.max() + pad), max(0, xs.min() - pad):min(W, xs.max() + pad)]
     out = cfg["out_dir"]; os.makedirs(out, exist_ok=True)
     cv2.imwrite(os.path.join(out, "logo_mark_gray.png"), master)
-    cv2.imwrite(os.path.join(out, "logo_icon.png"), make_icon(master, cfg))
+    icon_png = os.path.join(out, "logo_icon.png")
+    cv2.imwrite(icon_png, make_icon(master, cfg))
+    # Windows .ico (multi-size) for the built .exe — best-effort (needs Pillow).
+    try:
+        from PIL import Image
+        Image.open(icon_png).convert("RGBA").save(
+            os.path.join(out, "logo_icon.ico"),
+            sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
+        )
+    except Exception as e:  # pragma: no cover
+        print(f"(.ico skipped: {e})")
 
     # 5) accent-tint previews (accent x luminance on ink) — same maths the app uses
     def tint(M, hexc, ink):
