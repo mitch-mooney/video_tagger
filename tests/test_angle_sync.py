@@ -1,6 +1,7 @@
 # tests/test_angle_sync.py
 from videotagger.core.angle_sync import (
-    PeriodMark, active_period, build_angle, map_to_angle,
+    DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, map_to_angle,
+    needs_resync,
 )
 from videotagger.models.project import Period, VideoAngle
 
@@ -147,3 +148,34 @@ def test_build_angle_reuses_existing_angle_id():
         [], name="B", source_paths=["b.mp4"], merged_path="b.mp4", existing_angle_id="a1",
     )
     assert angle.id == "a1"
+
+
+# ── needs_resync (the secondary-angle drift decision) ─────────────────────────
+
+def test_needs_resync_false_within_tolerance():
+    assert needs_resync(10.0, 10.05, tolerance=0.08) is False
+
+
+def test_needs_resync_true_when_drift_exceeds_tolerance():
+    assert needs_resync(10.0, 10.2, tolerance=0.08) is True
+
+
+def test_needs_resync_boundary_is_not_a_resync():
+    # exactly at tolerance is within tolerance (strict >). 0.5 is exactly
+    # representable, so this exercises the boundary without float fuzz.
+    assert needs_resync(0.0, 0.5, tolerance=0.5) is False
+    assert needs_resync(0.0, 0.5, tolerance=0.25) is True
+
+
+def test_needs_resync_is_symmetric_for_negative_drift():
+    assert needs_resync(10.0, 9.8, tolerance=0.08) is True
+
+
+def test_needs_resync_zero_drift_is_false():
+    assert needs_resync(42.0, 42.0, tolerance=0.08) is False
+
+
+def test_needs_resync_uses_default_tolerance_when_omitted():
+    # default is DRIFT_TOLERANCE_S; a drift just over it triggers a resync
+    assert needs_resync(0.0, DRIFT_TOLERANCE_S + 0.01) is True
+    assert needs_resync(0.0, DRIFT_TOLERANCE_S - 0.01) is False

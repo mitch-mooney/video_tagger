@@ -18,6 +18,17 @@ from typing import List, Optional, Tuple
 
 from videotagger.models.project import Period, VideoAngle
 
+# Re-seek the secondary angle when it drifts more than this (seconds) from the
+# mapped target. ≈ 2 frames at 25fps.
+DRIFT_TOLERANCE_S = 0.08
+
+
+def needs_resync(expected: float, actual: float, tolerance: float = DRIFT_TOLERANCE_S) -> bool:
+    """Whether a secondary angle at ``actual`` (s) has drifted far enough from its
+    mapped ``expected`` (s) to warrant a re-seek. Symmetric; the boundary is within
+    tolerance (strict ``>``)."""
+    return abs(actual - expected) > tolerance
+
 
 def active_period(periods: List[Period], t: float) -> Optional[Period]:
     """Return the period containing canonical time ``t``.

@@ -6,12 +6,10 @@ from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from videotagger.ui.zoomable_video_view import ZoomableVideoView
+from videotagger.core.angle_sync import needs_resync
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QSlider, QStackedWidget, QVBoxLayout, QWidget,
 )
-
-# Re-seek the secondary angle when it drifts more than this from the mapped target.
-_DRIFT_TOLERANCE_S = 0.08  # ≈ 2 frames at 25fps
 
 
 class PlayerWidget(QWidget):
@@ -263,7 +261,7 @@ class PlayerWidget(QWidget):
             return
         expected = self._mapper(pos)
         actual = self._player2.position() / 1000.0
-        if abs(actual - expected) > _DRIFT_TOLERANCE_S:
+        if needs_resync(expected, actual):
             self._player2.setPosition(int(expected * 1000))
 
     def _on_duration_changed(self, ms: int) -> None:
