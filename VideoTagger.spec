@@ -57,6 +57,11 @@ pyz = PYZ(a.pure, a.zipped_data)
 
 # ── Windows: single-file EXE ──────────────────────────────────────────────────
 if sys.platform == 'win32':
+    _win_icon = (
+        'videotagger/resources/logo.ico'
+        if Path('videotagger/resources/logo.ico').exists()
+        else None
+    )
     exe = EXE(
         pyz,
         a.scripts,
@@ -69,7 +74,7 @@ if sys.platform == 'win32':
         strip=False,
         upx=False,
         console=False,
-        icon=None,
+        icon=_win_icon,
     )
 
 # ── macOS: .app bundle ────────────────────────────────────────────────────────
@@ -107,8 +112,8 @@ elif sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'VideoTagger',
             'CFBundleDisplayName': 'VideoTagger',
-            'CFBundleVersion': '2.0.0',
-            'CFBundleShortVersionString': '2.0.0',
+            'CFBundleVersion': '2.1.0',
+            'CFBundleShortVersionString': '2.1.0',
             'NSHighResolutionCapable': True,
             'NSRequiresAquaSystemAppearance': False,
         },

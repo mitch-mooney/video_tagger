@@ -6,30 +6,30 @@ HELP_HTML = """
 <head>
 <style>
   body { font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-         font-size: 9pt; color: #c8d8e8; background: #060911;
+         font-size: 9pt; color: #e8eef6; background: #06090e;
          margin: 14px 18px; line-height: 1.75; }
-  h2   { color: #00b09b; font-size: 10.5pt; font-weight: 700;
-         margin: 20px 0 6px 0; border-bottom: 1px solid #141e2e;
+  h2   { color: #15e6c4; font-size: 10.5pt; font-weight: 700;
+         margin: 20px 0 6px 0; border-bottom: 1px solid #232d3d;
          padding-bottom: 5px; letter-spacing: 0.3px; }
-  h3   { color: #5ab8b0; font-size: 9pt; font-weight: 600;
+  h3   { color: #7e90a8; font-size: 9pt; font-weight: 600;
          margin: 14px 0 4px 0; text-transform: uppercase;
          letter-spacing: 0.7px; font-size: 8pt; }
-  p    { margin: 4px 0 10px 0; color: #8499b0; }
-  code { background: #0a1422; color: #00d4b8; padding: 1px 6px;
-         border-radius: 4px; border: 1px solid #1a2840;
-         font-family: 'Cascadia Code', Consolas, monospace; font-size: 8pt; }
+  p    { margin: 4px 0 10px 0; color: #7e90a8; }
+  code { background: #161f2d; color: #5cf3da; padding: 1px 6px;
+         border-radius: 4px; border: 1px solid #232d3d;
+         font-family: 'Cascadia Mono', 'Cascadia Code', Consolas, monospace; font-size: 8pt; }
   table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
-  th   { background: #060911; color: #364e64; text-align: left;
-         padding: 6px 10px; border-bottom: 1px solid #141e2e;
+  th   { background: #06090e; color: #4a5a70; text-align: left;
+         padding: 6px 10px; border-bottom: 1px solid #232d3d;
          font-size: 7.5pt; letter-spacing: 1px; text-transform: uppercase;
          font-weight: 700; }
-  td   { padding: 6px 10px; border-bottom: 1px solid #0e1622; color: #8499b0; }
-  td:first-child { color: #00b09b; font-family: 'Cascadia Code', Consolas, monospace;
+  td   { padding: 6px 10px; border-bottom: 1px solid #19212f; color: #7e90a8; }
+  td:first-child { color: #15e6c4; font-family: 'Cascadia Mono', 'Cascadia Code', Consolas, monospace;
                    font-size: 8pt; white-space: nowrap; }
-  tr:hover td { background: #0b1420; }
-  .tip { background: #091624; border-left: 3px solid #00b09b;
+  tr:hover td { background: #161f2d; }
+  .tip { background: #0c2320; border-left: 3px solid #15e6c4;
          padding: 8px 12px; margin: 10px 0; border-radius: 0 5px 5px 0;
-         color: #8ab8b0; }
+         color: #9fb4ad; }
 </style>
 </head>
 <body>
@@ -58,6 +58,9 @@ and export or present them to your team.</p>
   <tr><td>Left / Right</td><td>Step ±5 seconds</td></tr>
   <tr><td>Shift+Left / Right</td><td>Step ±1 frame (~0.04 s)</td></tr>
   <tr><td>[ / ]</td><td>Decrease / increase playback speed</td></tr>
+  <tr><td>+ / −</td><td>Zoom in / out (or scroll wheel over the video)</td></tr>
+  <tr><td>0</td><td>Reset zoom to full frame</td></tr>
+  <tr><td>V</td><td>Switch camera angle (when a second angle is loaded)</td></tr>
   <tr><td>Ctrl+N</td><td>New project</td></tr>
   <tr><td>Ctrl+O</td><td>Open project</td></tr>
   <tr><td>Ctrl+S</td><td>Save project</td></tr>
@@ -74,7 +77,29 @@ to the nearest 0.01 second.</p>
 
 <h3>Timeline</h3>
 <p>The coloured bar below the player shows all your clips. Each colour corresponds to a
-category. Click a clip marker to jump to its start time. Click blank space to seek.</p>
+category. Click a clip marker to jump to its start time. Click blank space to seek.
+If you've marked periods (see below), <code>Q1</code>–<code>Q4</code> dividers show where
+each quarter begins.</p>
+
+<h2>Periods (Quarters)</h2>
+<p>Divide the match into periods so the timeline shows quarter dividers — handy for
+navigation, and used by the dual-angle sync.</p>
+<ol>
+  <li>Go to <b>Video → Manage Periods</b>.</li>
+  <li>Scrub the preview to the frame each period begins, select that period's row,
+      and click <b>Set Start @ Playhead</b>. Add or remove rows for halves, etc.</li>
+  <li>Click <b>OK</b> — the <code>Q1</code>–<code>Q4</code> dividers appear on the timeline.</li>
+</ol>
+
+<h2>Camera Angles</h2>
+<p>Review the same match from two angles (e.g. behind-goals and broadcast) and switch
+between them instantly during playback.</p>
+<ol>
+  <li>Go to <b>Video → Manage Angles</b> and add the second angle's video file(s).</li>
+  <li>Mark where each period starts in both videos, then click <b>OK</b>.</li>
+  <li>Press <code>V</code> while playing to switch angles — they stay locked together and
+      re-sync at every period boundary.</li>
+</ol>
 
 <h2>Playlists</h2>
 <p>Playlists let you group clips for presentation or export.</p>

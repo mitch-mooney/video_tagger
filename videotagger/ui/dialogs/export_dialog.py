@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from videotagger.models.project import Project
-from videotagger.core.playlist_builder import PlaylistBuilder
 
 
 class ExportDialog(QDialog):
@@ -18,7 +17,8 @@ class ExportDialog(QDialog):
         self._project = project
         self._playlist_id = playlist_id
         self._pl = next(p for p in project.playlists if p.id == playlist_id)
-        self._clips = PlaylistBuilder(project).get_clips(playlist_id)
+        clip_map = {c.id: c for c in project.clips}
+        self._clips = [clip_map[cid] for cid in self._pl.clip_ids if cid in clip_map]
         self._setup_ui()
 
     def _setup_ui(self):

@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QWidget, QToolTip
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont
 from videotagger.models.project import Project
+from videotagger.ui import theme
 
 class TimelineWidget(QWidget):
     seek_requested = pyqtSignal(float)
@@ -15,7 +16,7 @@ class TimelineWidget(QWidget):
         self._duration = 0.0
         self._position = 0.0
         self._filter: str = ""
-        self.setMinimumHeight(50)
+        self.setMinimumHeight(56)
         self.setMouseTracking(True)
 
     def set_project(self, project: Project) -> None:
@@ -49,10 +50,10 @@ class TimelineWidget(QWidget):
         w, h = self.width(), self.height()
 
         # Background
-        painter.fillRect(0, 0, w, h, QColor("#060911"))
+        painter.fillRect(0, 0, w, h, QColor(theme.INK_DEEP))
 
         # Subtle top/bottom edge lines
-        painter.setPen(QPen(QColor("#0f1828"), 1))
+        painter.setPen(QPen(QColor(theme.LINE), 1))
         painter.drawLine(0, 0, w, 0)
         painter.drawLine(0, h - 1, w, h - 1)
 
@@ -64,9 +65,25 @@ class TimelineWidget(QWidget):
         track_h = 14
 
         # Track background with subtle gradient feel (two-tone)
-        painter.fillRect(0, track_y, w, track_h, QColor("#0b1422"))
-        painter.fillRect(0, track_y, w, 1, QColor("#141e2e"))
-        painter.fillRect(0, track_y + track_h - 1, w, 1, QColor("#141e2e"))
+        painter.fillRect(0, track_y, w, track_h, QColor(theme.SURFACE))
+        painter.fillRect(0, track_y, w, 1, QColor(theme.LINE))
+        painter.fillRect(0, track_y + track_h - 1, w, 1, QColor(theme.LINE))
+
+        # Period dividers — dashed vertical lines with subtle labels
+        for period in getattr(self._project, "periods", []) or []:
+            if period.primary_start <= 0 or period.primary_start >= self._duration:
+                continue
+            div_x = int(period.primary_start / self._duration * w)
+            div_pen = QPen(QColor(theme.LINE), 1)
+            div_pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(div_pen)
+            painter.drawLine(div_x, track_y, div_x, track_y + track_h)
+            label_font = QFont("Bahnschrift", 7)
+            label_font.setBold(True)
+            label_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.5)
+            painter.setFont(label_font)
+            painter.setPen(QPen(QColor(theme.FAINT), 1))
+            painter.drawText(div_x + 3, track_y - 6, period.name)
 
         cat_map = {c.id: c for c in self._project.categories}
         for clip in self._project.clips:
@@ -74,7 +91,7 @@ class TimelineWidget(QWidget):
             x2 = int(clip.end / self._duration * w)
             clip_w = max(2, x2 - x1)
             cat = cat_map.get(clip.category_id)
-            color = QColor(cat.color if cat else "#557799")
+            color = QColor(cat.color if cat else theme.CAT_FALLBACK)
 
             matches = self._clip_matches(clip, cat_map)
             if self._filter and not matches:
@@ -92,20 +109,20 @@ class TimelineWidget(QWidget):
             # Notes dot above the track
             if clip.notes and clip.notes.strip():
                 dot_x = x1 + max(1, clip_w // 2)
-                dot_color = QColor("#00b09b") if (matches or not self._filter) else QColor("#1a3040")
+                dot_color = QColor(theme.ACCENT) if (matches or not self._filter) else QColor(theme.LINE)
                 painter.setBrush(dot_color)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawEllipse(dot_x - 2, track_y - 5, 4, 4)
 
         # Playhead — accent color with subtle glow line
         px = int(self._position / self._duration * w)
-        painter.setPen(QPen(QColor("#00b09b"), 1))
+        painter.setPen(QPen(QColor(theme.ACCENT), 1))
         painter.drawLine(px, 0, px, h)
         # Bright centre pixel
-        painter.setPen(QPen(QColor("#00d4b8"), 1))
+        painter.setPen(QPen(QColor(theme.ACCENT_LIGHT), 1))
         painter.drawLine(px, track_y - 2, px, track_y + track_h + 2)
         # Playhead triangle indicator at top
-        painter.setBrush(QColor("#00b09b"))
+        painter.setBrush(QColor(theme.ACCENT))
         painter.setPen(Qt.PenStyle.NoPen)
         pts = [
             QPoint(px - 4, 0),

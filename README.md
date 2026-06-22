@@ -2,7 +2,7 @@
 
 A desktop application for tagging and reviewing sporting footage. Open a video, mark clips with keyboard shortcuts, build playlists, and present or export them.
 
-**Current release: v2.0**
+**Current release: v2.1.0**
 
 ---
 
@@ -59,8 +59,10 @@ Then double-click normally to launch.
 
 - **Open video files** — `.mp4`, `.mov`, `.avi`, `.mkv`, `.m4v`
 - **Multi-file projects** — load a match split across multiple files; VideoTagger merges them into one continuous timeline via FFmpeg automatically
+- **Dual camera angles** — load a second angle (e.g. broadcast vision alongside behind-goals), sync them at each quarter/period start, and switch instantly with `V` while playing — both angles decode in lockstep for seamless switching
 - **Tag clips** — press `I` to mark start, `O` to mark end; assign a category, label, and optional notes
 - **Timeline view** — colour-coded clip markers with clickable seek and notes indicators
+- **Match periods** — mark quarter/half starts via **Video → Manage Periods** to show `Q1`–`Q4` dividers on the timeline
 - **Tag Manager** — create, rename, delete categories and labels; save and load templates
 - **Built-in AFL template** — Offence, Defence, Stoppages, General (with labels pre-filled)
 - **Playlists** — build clip playlists; add clips via right-click context menu
@@ -88,6 +90,7 @@ Then double-click normally to launch.
 | `+` / `-` | Zoom in / out (or scroll wheel over the video) |
 | `0` | Reset zoom to full frame |
 | Click + drag | Pan the zoomed view |
+| `V` | Switch camera angle (when a second angle is loaded) |
 | `Ctrl+N` | New project |
 | `Ctrl+O` | Open project |
 | `Ctrl+S` | Save project |
@@ -142,11 +145,42 @@ Right-click a playlist and choose **Present**. The window goes full-screen and p
 
 ---
 
+## Periods (Quarters)
+
+Divide the match into periods so the timeline shows `Q1`–`Q4` dividers — useful for navigation,
+and reused by the dual-angle sync.
+
+1. With a project open, go to **Video → Manage Periods…**.
+2. The dialog opens with `Q1`–`Q4` pre-filled and a scrubbable preview. Scrub to the exact
+   frame each period begins, select that period's row, and click **Set Start @ Playhead**.
+   Add or remove rows for halves or extra periods.
+3. Click **OK** — the dividers appear on the timeline immediately. Save to keep them in the `.vtp`.
+
+Works on any project — no second camera angle required.
+
+---
+
+## Camera Angles
+
+Review the same match from two angles (e.g. behind-goals and broadcast vision) and switch
+between them instantly while playing.
+
+1. With a project open, go to **Video → Manage Angles…**.
+2. Add the second angle's video file(s) and click **Load / Merge Angle** (multiple files are
+   merged just like the primary, e.g. one file per quarter).
+3. The two videos appear side by side. For each period row (Q1–Q4 by default; add/remove/rename
+   as needed), scrub each preview to the exact frame the period begins, select the row, and click
+   **Set Primary @ Playhead** / **Set Second @ Playhead**.
+4. Click **OK**. Back in the main window, press **`V`** to switch angles — both play in lockstep
+   and re-sync at every period boundary, so a continuous recording and a per-quarter one stay
+   aligned. Clips are shared across angles. Save to keep the sync points in the `.vtp`.
+
+---
+
 ## Exporting
 
 Right-click a playlist in the **Playlists** tab and choose **Export**. The export dialog offers four independent options — select any combination:
 
-| Option | Output | Notes |
 |--------|--------|-------|
 | **Individual clip files** | One `.mp4` per clip | Named `{video}_{Category}_{Label}_{001}.mp4`; stream-copied (fast) |
 | **Single merged file** | One `.mp4` for the whole playlist | All clips concatenated in order via FFmpeg |
@@ -170,8 +204,8 @@ Projects are saved as `.vtp` files (plain JSON). Share them with teammates — t
 Push a version tag and GitHub Actions builds both platforms automatically:
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
+git tag v2.1.0
+git push origin v2.1.0
 ```
 
 The workflow builds `VideoTagger.exe` (Windows) and `VideoTagger.app` / `.dmg` (macOS) in parallel and attaches both to a GitHub Release.

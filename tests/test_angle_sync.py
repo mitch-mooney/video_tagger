@@ -1,0 +1,205 @@
+# tests/test_angle_sync.py
+from videotagger.core.angle_sync import (
+    DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, build_periods,
+    map_to_angle, needs_resync,
+)
+from videotagger.models.project import Period, VideoAngle
+
+
+def _periods():
+    # Primary (canonical) timeline: continuous recording with breaks between quarters.
+    return [
+        Period(name="Q1", primary_start=10.0, id="p1"),
+        Period(name="Q2", primary_start=1000.0, id="p2"),
+        Period(name="Q3", primary_start=2000.0, id="p3"),
+        Period(name="Q4", primary_start=3000.0, id="p4"),
+    ]
+
+
+def _angle():
+    # Secondary angle: started/stopped each quarter, so quarters sit back-to-back.
+    return VideoAngle(
+        name="Broadcast",
+        merged_video_path="b.mp4",
+        period_starts={"p1": 5.0, "p2": 600.0, "p3": 1200.0, "p4": 1800.0},
+    )
+
+
+# ── active_period ───────────────────────────────────────────────────────────
+
+def test_active_period_within_first_period():
+    assert active_period(_periods(), 500.0).id == "p1"
+
+
+def test_active_period_at_boundary_is_next_period():
+    # exactly at Q2's primary_start belongs to Q2
+    assert active_period(_periods(), 1000.0).id == "p2"
+
+
+def test_active_period_before_first_clamps_to_first():
+    assert active_period(_periods(), 0.0).id == "p1"
+
+
+def test_active_period_after_last_is_last():
+    assert active_period(_periods(), 9999.0).id == "p4"
+
+
+def test_active_period_empty_returns_none():
+    assert active_period([], 100.0) is None
+
+
+# ── map_to_angle ────────────────────────────────────────────────────────────
+
+def test_map_within_period_applies_offset():
+    # 100s into Q1 on primary (t=110) -> 100s into Q1 on angle (5 + 100)
+    assert map_to_angle(_periods(), _angle(), 110.0) == 105.0
+
+
+def test_map_resyncs_each_period():
+    # 50s into Q2 on primary (t=1050) -> angle Q2 start (600) + 50
+    assert map_to_angle(_periods(), _angle(), 1050.0) == 650.0
+
+
+def test_map_before_first_period_uses_first_offset():
+    # t=0 is 10s before Q1 primary_start -> angle 5 + (0 - 10) = -5 clamps to 0
+    assert map_to_angle(_periods(), _angle(), 0.0) == 0.0
+
+
+def test_map_empty_periods_is_identity():
+    assert map_to_angle([], _angle(), 123.0) == 123.0
+
+
+def test_map_missing_period_start_is_identity():
+    angle = VideoAngle(name="X", merged_video_path="x.mp4", period_starts={})
+    assert map_to_angle(_periods(), angle, 1050.0) == 1050.0
+
+
+def test_map_never_returns_negative():
+    angle = VideoAngle(name="X", merged_video_path="x.mp4", period_starts={"p1": 0.0})
+    assert map_to_angle([Period(name="Q1", primary_start=100.0, id="p1")], angle, 0.0) == 0.0
+
+
+# ── build_angle (pure inverse: table marks -> periods + angle) ────────────────
+
+def test_build_angle_basic_periods_and_starts():
+    marks = [
+        PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0),
+        PeriodMark(name="Q2", primary_start=1000.0, secondary_start=600.0),
+    ]
+    periods, angle = build_angle(
+        marks, name="Broadcast", source_paths=["b.mp4"], merged_path="b.mp4",
+    )
+    assert [p.name for p in periods] == ["Q1", "Q2"]
+    assert [p.primary_start for p in periods] == [10.0, 1000.0]
+    assert angle.name == "Broadcast"
+    assert angle.merged_video_path == "b.mp4"
+    # period_starts is keyed by the generated period ids, in order
+    assert angle.period_starts[periods[0].id] == 5.0
+    assert angle.period_starts[periods[1].id] == 600.0
+
+
+def test_build_angle_reuses_period_id():
+    marks = [PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0, period_id="p1")]
+    periods, angle = build_angle(
+        marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4",
+    )
+    assert periods[0].id == "p1"
+    assert angle.period_starts == {"p1": 5.0}
+
+
+def test_build_angle_generates_period_id_when_absent():
+    marks = [PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0)]
+    periods, _ = build_angle(
+        marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4",
+    )
+    assert periods[0].id  # a fresh uuid was assigned
+
+
+def test_build_angle_omits_missing_secondary_start():
+    marks = [
+        PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0, period_id="p1"),
+        PeriodMark(name="Q2", primary_start=1000.0, secondary_start=None, period_id="p2"),
+    ]
+    _, angle = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert angle.period_starts == {"p1": 5.0}
+
+
+def test_build_angle_blank_name_falls_back_to_positional():
+    marks = [PeriodMark(name="", primary_start=10.0), PeriodMark(name="  ", primary_start=20.0)]
+    periods, _ = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert periods[0].name == "P1"
+    assert periods[1].name == ""  # whitespace is truthy then stripped, matching old behavior
+
+
+def test_build_angle_none_primary_defaults_to_zero():
+    marks = [PeriodMark(name="Q1", primary_start=None)]
+    periods, _ = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert periods[0].primary_start == 0.0
+
+
+def test_build_angle_name_and_source_fallbacks():
+    _, angle = build_angle([], name="   ", source_paths=[], merged_path="merged.mp4")
+    assert angle.name == "Angle 2"
+    assert angle.source_video_paths == ["merged.mp4"]
+
+
+def test_build_angle_reuses_existing_angle_id():
+    _, angle = build_angle(
+        [], name="B", source_paths=["b.mp4"], merged_path="b.mp4", existing_angle_id="a1",
+    )
+    assert angle.id == "a1"
+
+
+# ── build_periods (canonical periods from table marks; no angle) ──────────────
+
+def test_build_periods_basic():
+    marks = [PeriodMark(name="Q1", primary_start=10.0), PeriodMark(name="Q2", primary_start=1000.0)]
+    periods = build_periods(marks)
+    assert [p.name for p in periods] == ["Q1", "Q2"]
+    assert [p.primary_start for p in periods] == [10.0, 1000.0]
+
+
+def test_build_periods_blank_name_and_none_primary():
+    periods = build_periods([PeriodMark(name="", primary_start=None)])
+    assert periods[0].name == "P1"
+    assert periods[0].primary_start == 0.0
+
+
+def test_build_periods_reuses_id():
+    periods = build_periods([PeriodMark(name="Q1", primary_start=1.0, period_id="p1")])
+    assert periods[0].id == "p1"
+
+
+def test_build_periods_empty():
+    assert build_periods([]) == []
+
+
+# ── needs_resync (the secondary-angle drift decision) ─────────────────────────
+
+def test_needs_resync_false_within_tolerance():
+    assert needs_resync(10.0, 10.05, tolerance=0.08) is False
+
+
+def test_needs_resync_true_when_drift_exceeds_tolerance():
+    assert needs_resync(10.0, 10.2, tolerance=0.08) is True
+
+
+def test_needs_resync_boundary_is_not_a_resync():
+    # exactly at tolerance is within tolerance (strict >). 0.5 is exactly
+    # representable, so this exercises the boundary without float fuzz.
+    assert needs_resync(0.0, 0.5, tolerance=0.5) is False
+    assert needs_resync(0.0, 0.5, tolerance=0.25) is True
+
+
+def test_needs_resync_is_symmetric_for_negative_drift():
+    assert needs_resync(10.0, 9.8, tolerance=0.08) is True
+
+
+def test_needs_resync_zero_drift_is_false():
+    assert needs_resync(42.0, 42.0, tolerance=0.08) is False
+
+
+def test_needs_resync_uses_default_tolerance_when_omitted():
+    # default is DRIFT_TOLERANCE_S; a drift just over it triggers a resync
+    assert needs_resync(0.0, DRIFT_TOLERANCE_S + 0.01) is True
+    assert needs_resync(0.0, DRIFT_TOLERANCE_S - 0.01) is False

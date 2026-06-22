@@ -1,8 +1,21 @@
 # videotagger/ui/tag_panel.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QLabel
 from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtGui import QColor, QBrush
+from PyQt6.QtGui import QColor, QBrush, QPixmap, QPainter, QIcon
 from videotagger.models.project import Project
+
+
+def _swatch(color: str, size: int = 11) -> QIcon:
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor(color)))
+    p.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3)
+    p.end()
+    return QIcon(pm)
+
 
 class TagPanel(QWidget):
     label_selected = pyqtSignal(str, str)  # category_id, label
@@ -22,6 +35,7 @@ class TagPanel(QWidget):
         self._tree.clear()
         for cat in project.categories:
             cat_item = QTreeWidgetItem([cat.name])
+            cat_item.setIcon(0, _swatch(cat.color))
             cat_item.setForeground(0, QBrush(QColor(cat.color)))
             cat_item.setData(0, Qt.ItemDataRole.UserRole, ("category", cat.id))
             for label in cat.labels:

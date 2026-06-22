@@ -7,16 +7,22 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QIcon
 from videotagger.models.project import Project
+from videotagger.core.project_document import ProjectDocument
+from videotagger.ui import theme
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("VideoTagger")
         self.resize(1280, 800)
-        self._project: Project | None = None
-        self._project_path: str | None = None
+        self._doc: ProjectDocument | None = None
         self._signals_wired = False
-        self._dirty = False
+        # Resolve the accent BEFORE building the UI so inline-styled widgets
+        # (header, transport, keycaps) build in the same accent the stylesheet uses.
+        from videotagger.data.settings_manager import SettingsManager
+        self._settings = SettingsManager.load()
+        self._accent_color = self._settings.get("accent_color", theme.DEFAULT_ACCENT)
+        theme.set_accent(self._accent_color)
         self._apply_style()
         self._setup_ui()
         self._setup_menu()
@@ -24,11 +30,46 @@ class MainWindow(QMainWindow):
         self._restore_settings()
 
     def _apply_style(self):
-        from videotagger.ui.style import APP_STYLESHEET
-        self.setStyleSheet(APP_STYLESHEET)
-        logo_path = self._resource_path("logo.png")
-        if logo_path:
-            self.setWindowIcon(QIcon(logo_path))
+        from videotagger.ui.style import build_stylesheet
+        self.setStyleSheet(build_stylesheet(theme.ACCENT))
+        self._apply_window_icon()
+
+    @staticmethod
+    def _tint_pixmap(src: QPixmap, color: str) -> QPixmap:
+        """Tint a grayscale+alpha pixmap by accent (accent × luminance), preserving alpha."""
+        from PyQt6.QtGui import QPainter, QColor
+        out = QPixmap(src.size())
+        out.fill(Qt.GlobalColor.transparent)
+        p = QPainter(out)
+        p.drawPixmap(0, 0, src)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+        p.fillRect(out.rect(), QColor(color))
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        p.drawPixmap(0, 0, src)  # restore the master's alpha
+        p.end()
+        return out
+
+    def _apply_logo_tint(self):
+        if getattr(self, "_logo_master", None) is None or self._logo_master.isNull():
+            return
+        src = self._logo_master.scaledToHeight(42, Qt.TransformationMode.SmoothTransformation)
+        self._logo_lbl.setPixmap(self._tint_pixmap(src, theme.ACCENT))
+
+    def _refresh_wordmark(self):
+        self._title_label.setText(
+            f'<span style="color:{theme.TEXT};">VIDEO</span>'
+            f'<span style="color:{theme.ACCENT};">TAGGER</span>'
+        )
+
+    def _apply_window_icon(self):
+        logo_path = self._resource_path("logo_mark.png")
+        if not logo_path:
+            return
+        master = QPixmap(logo_path)
+        if master.isNull():
+            return
+        src = master.scaledToHeight(256, Qt.TransformationMode.SmoothTransformation)
+        self.setWindowIcon(QIcon(self._tint_pixmap(src, theme.ACCENT)))
 
     @staticmethod
     def _resource_path(filename: str) -> str | None:
@@ -59,45 +100,39 @@ class MainWindow(QMainWindow):
         header = QWidget()
         header.setFixedHeight(52)
         header.setStyleSheet(
-            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "stop:0 #0a0f1a, stop:1 #060911);"
-            "border-bottom: 1px solid #141e2e;"
+            f"background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            f"stop:0 {theme.INK}, stop:1 {theme.INK_DEEP});"
+            f"border-bottom: 1px solid {theme.LINE};"
         )
         header_row = QHBoxLayout(header)
         header_row.setContentsMargins(14, 0, 16, 0)
         header_row.setSpacing(10)
 
-        logo_path = self._resource_path("logo.png")
-        if logo_path:
-            logo_lbl = QLabel()
-            pix = QPixmap(logo_path).scaledToHeight(
-                32, Qt.TransformationMode.SmoothTransformation
-            )
-            logo_lbl.setPixmap(pix)
-            logo_lbl.setStyleSheet("background: transparent;")
-            header_row.addWidget(logo_lbl)
+        self._logo_lbl = QLabel()
+        self._logo_lbl.setStyleSheet("background: transparent;")
+        logo_path = self._resource_path("logo_mark.png")
+        self._logo_master = QPixmap(logo_path) if logo_path else QPixmap()
+        self._apply_logo_tint()
+        header_row.addWidget(self._logo_lbl)
 
-        self._title_label = QLabel("VideoTagger")
+        self._title_label = QLabel()
         self._title_label.setStyleSheet(
-            "background: transparent; color: #e2ecf6;"
-            "font-size: 13pt; font-weight: 700; letter-spacing: 0.5px;"
+            f"background: transparent;"
+            f"font-family: {theme.FONT_DISPLAY}; font-size: 14pt;"
+            f"font-weight: 700; letter-spacing: 1.5px;"
         )
+        self._refresh_wordmark()
         header_row.addWidget(self._title_label)
 
-        version_badge = QLabel("v2.0")
-        version_badge.setStyleSheet(
-            "background: #0d2030; color: #00b09b;"
-            "font-size: 7pt; font-weight: 700; letter-spacing: 1px;"
-            "border: 1px solid #003d4f; border-radius: 3px;"
-            "padding: 1px 6px;"
-        )
-        header_row.addWidget(version_badge)
+        self._version_badge = QLabel("v2.1")
+        self._version_badge.setStyleSheet(self._badge_style())
+        header_row.addWidget(self._version_badge)
         header_row.addStretch()
 
         self._file_label = QLabel("")
         self._file_label.setStyleSheet(
-            "background: transparent; color: #4d6880; font-size: 8pt;"
-            "font-family: 'Cascadia Code', 'Consolas', monospace;"
+            f"background: transparent; color: {theme.FAINT};"
+            f"font-size: 8pt; font-family: {theme.FONT_MONO};"
         )
         header_row.addWidget(self._file_label)
         layout.addWidget(header)
@@ -173,6 +208,16 @@ class MainWindow(QMainWindow):
         quit_act.triggered.connect(self.close)
         file_menu.addAction(quit_act)
 
+        video_menu = menubar.addMenu("&Video")
+        self._periods_act = QAction("Manage &Periods…", self)
+        self._periods_act.triggered.connect(self._manage_periods)
+        self._periods_act.setEnabled(False)
+        video_menu.addAction(self._periods_act)
+        self._angles_act = QAction("Manage &Angles…", self)
+        self._angles_act.triggered.connect(self._manage_angles)
+        self._angles_act.setEnabled(False)
+        video_menu.addAction(self._angles_act)
+
         tags_menu = menubar.addMenu("&Tags")
         manage_act = QAction("&Manage Tags...", self)
         manage_act.triggered.connect(self._open_tag_manager)
@@ -206,10 +251,9 @@ class MainWindow(QMainWindow):
         self._load_project(proj, path)
 
     def _save_project(self):
-        if not self._project:
+        if not self._doc:
             return
-        from videotagger.data.project_manager import ProjectManager
-        if not self._project_path:
+        if self._doc.path is None:
             from PyQt6.QtWidgets import QFileDialog
             path, _ = QFileDialog.getSaveFileName(
                 self, "Save Project", "", "Video Tagger Project (*.vtp)"
@@ -218,18 +262,17 @@ class MainWindow(QMainWindow):
                 return
             if not path.endswith(".vtp"):
                 path += ".vtp"
-            self._project_path = path
-        ProjectManager.save(self._project, self._project_path)
-        self._dirty = False
-        self.statusBar().showMessage(f"Saved: {self._project_path}", 3000)
+            self._doc.save_as(path)
+        else:
+            self._doc.save()
+        self.statusBar().showMessage(f"Saved: {self._doc.path}", 3000)
 
     def _open_tag_manager(self):
-        if not self._project:
+        if not self._doc:
             return
         from videotagger.ui.dialogs.tag_manager_dialog import TagManagerDialog
-        dlg = TagManagerDialog(self._project, self)
+        dlg = TagManagerDialog(self._doc, self)
         dlg.exec()
-        self.tag_panel.refresh(self._project)
 
     def _load_project(self, project: Project, path):
         import os
@@ -267,22 +310,68 @@ class MainWindow(QMainWindow):
                 return
 
         from videotagger.core.tagging_engine import TaggingEngine
-        self._project = project
-        self._project_path = path
+        self._doc = ProjectDocument(project, path)
+        self._doc.subscribe(self._refresh_all)
         self._tagging_engine = TaggingEngine()
         self._save_act.setEnabled(True)
         self._import_act.setEnabled(True)
         self._package_act.setEnabled(True)
+        self._periods_act.setEnabled(True)
+        self._angles_act.setEnabled(True)
         self.setWindowTitle("VideoTagger")
         self._file_label.setText(os.path.basename(project.merged_video_path))
         self.player.load(project.merged_video_path)
-        self.timeline.set_project(project)
-        self.tag_panel.refresh(project)
-        self.clips_panel.refresh(project)
+        self._refresh_all()
         self._wire_signals()
+        self._apply_secondary_angle()
+
+    def _refresh_all(self):
+        """Single subscriber to the document's `changed`: repaint every panel."""
+        if not self._doc:
+            return
+        project = self._doc.project
+        self.timeline.set_project(project)
+        self.clips_panel.refresh(project)
+        self.tag_panel.refresh(project)
+
+    def _apply_secondary_angle(self):
+        """Wire the project's secondary angle (if any) into the dual-decode player."""
+        if self._doc and self._doc.project.angles:
+            from videotagger.core.angle_sync import map_to_angle
+            angle = self._doc.project.angles[0]
+            periods = self._doc.project.periods
+            self.player.set_secondary_angle(
+                angle.merged_video_path,
+                lambda t: map_to_angle(periods, angle, t),
+                primary_name="Primary",
+                secondary_name=angle.name,
+            )
+            self.shortcut_bar.set_angle_available(True)
+        else:
+            self.player.clear_secondary_angle()
+            self.shortcut_bar.set_angle_available(False)
+
+    def _manage_periods(self):
+        if not self._doc:
+            return
+        from videotagger.ui.dialogs.periods_dialog import ManagePeriodsDialog
+        dlg = ManagePeriodsDialog(self._doc, self)
+        if dlg.exec():
+            self._save_act.setEnabled(True)
+            self.statusBar().showMessage("Periods updated", 3000)
+
+    def _manage_angles(self):
+        if not self._doc:
+            return
+        from videotagger.ui.dialogs.angle_sync_dialog import AngleSyncDialog
+        dlg = AngleSyncDialog(self._doc, self)
+        if dlg.exec():
+            self._apply_secondary_angle()
+            self._save_act.setEnabled(True)
+            self.statusBar().showMessage("Angle sync updated", 3000)
 
     def _package_project(self):
-        if not self._project:
+        if not self._doc:
             return
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
         import copy, os, shutil
@@ -292,16 +381,16 @@ class MainWindow(QMainWindow):
         if not folder:
             return
 
-        if self._project_path:
-            proj_stem = os.path.splitext(os.path.basename(self._project_path))[0]
+        if self._doc.path:
+            proj_stem = os.path.splitext(os.path.basename(self._doc.path))[0]
         else:
             proj_stem = "VideoTaggerProject"
 
         pkg_dir = os.path.join(folder, proj_stem)
         try:
             os.makedirs(pkg_dir, exist_ok=True)
-            shutil.copy2(self._project.merged_video_path, os.path.join(pkg_dir, "video.mp4"))
-            pkg_project = copy.copy(self._project)
+            shutil.copy2(self._doc.project.merged_video_path, os.path.join(pkg_dir, "video.mp4"))
+            pkg_project = copy.copy(self._doc.project)
             pkg_project.merged_video_path = "./video.mp4"
             pkg_project.source_video_paths = ["./video.mp4"]
             ProjectManager.save(pkg_project, os.path.join(pkg_dir, "project.vtp"))
@@ -327,6 +416,8 @@ class MainWindow(QMainWindow):
         self.clips_panel.export_requested.connect(self._on_export_requested)
         self.clips_panel.present_requested.connect(self._on_present_requested)
         self.clips_panel.new_playlist_requested.connect(self._new_playlist)
+        self.clips_panel.add_clips_to_playlist_requested.connect(self._on_add_clips_to_playlist)
+        self.clips_panel.delete_playlist_requested.connect(self._on_delete_playlist)
         self.clips_panel.filter_changed.connect(self.timeline.set_filter)
 
     def _setup_shortcuts(self):
@@ -348,12 +439,13 @@ class MainWindow(QMainWindow):
         QShortcut("=", self).activated.connect(self.player.zoom_in)
         QShortcut("-", self).activated.connect(self.player.zoom_out)
         QShortcut("0", self).activated.connect(self.player.reset_zoom)
+        QShortcut("V", self).activated.connect(self.player.switch_angle)
         QShortcut("Escape", self).activated.connect(self._cancel_mark)
         QShortcut("Ctrl+Z", self).activated.connect(self._undo_last_clip)
         QShortcut("F11", self).activated.connect(self._toggle_presentation)
 
     def _mark_in(self):
-        if self._project and hasattr(self, '_tagging_engine'):
+        if self._doc and hasattr(self, '_tagging_engine'):
             pos = self.player.get_position()
             self._tagging_engine.press_in(pos)
             self.shortcut_bar.set_marking(pos)
@@ -362,7 +454,7 @@ class MainWindow(QMainWindow):
             )
 
     def _mark_out(self):
-        if not self._project or not hasattr(self, '_tagging_engine'):
+        if not self._doc or not hasattr(self, '_tagging_engine'):
             return
         from videotagger.core.tagging_engine import TaggingState
         if self._tagging_engine.state != TaggingState.MARKING:
@@ -375,13 +467,10 @@ class MainWindow(QMainWindow):
         preset_cat = getattr(self, '_preset_category_id', None)
         preset_lbl = getattr(self, '_preset_label', None)
         from videotagger.ui.dialogs.new_clip_dialog import NewClipDialog
-        dlg = NewClipDialog(self._project, start, end, preset_cat, preset_lbl, self)
+        dlg = NewClipDialog(self._doc.project, start, end, preset_cat, preset_lbl, self)
         if dlg.exec():
             clip = dlg.clip()
-            self._project.clips.append(clip)
-            self._dirty = True
-            self.timeline.set_project(self._project)
-            self.clips_panel.refresh(self._project)
+            self._doc.add_clip(clip)
             self.statusBar().showMessage(
                 f"Clip added: {clip.label} ({start:.1f}s – {end:.1f}s)", 3000
             )
@@ -394,11 +483,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Clip mark cancelled", 2000)
 
     def _undo_last_clip(self):
-        if self._project and self._project.clips:
-            removed = self._project.clips.pop()
-            self._dirty = True
-            self.timeline.set_project(self._project)
-            self.clips_panel.refresh(self._project)
+        if not self._doc:
+            return
+        removed = self._doc.remove_last_clip()
+        if removed:
             self.statusBar().showMessage(f"Undo: removed clip '{removed.label}'", 3000)
 
     def _on_label_preselected(self, category_id: str, label: str):
@@ -407,38 +495,49 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Pre-selected: {label} — press I to start marking", 3000)
 
     def _on_clip_clicked_in_timeline(self, clip_id: str):
-        if self._project:
-            clip = next((c for c in self._project.clips if c.id == clip_id), None)
+        if self._doc:
+            clip = next((c for c in self._doc.project.clips if c.id == clip_id), None)
             if clip:
                 self.player.seek(clip.start)
 
     def _on_clip_selected(self, clip_id: str):
-        if self._project:
-            clip = next((c for c in self._project.clips if c.id == clip_id), None)
+        if self._doc:
+            clip = next((c for c in self._doc.project.clips if c.id == clip_id), None)
             if clip:
                 self.player.seek(clip.start)
 
     def _new_playlist(self):
         from PyQt6.QtWidgets import QInputDialog
-        from videotagger.core.playlist_builder import PlaylistBuilder
+        if not self._doc:
+            return
         name, ok = QInputDialog.getText(self, "New Playlist", "Playlist name:")
         if ok and name.strip():
-            PlaylistBuilder(self._project).create_playlist(name.strip())
-            self.clips_panel.refresh(self._project)
+            self._doc.new_playlist(name.strip())
+
+    def _on_add_clips_to_playlist(self, playlist_id: str, clip_ids: list):
+        if not self._doc:
+            return
+        for clip_id in clip_ids:
+            self._doc.add_clip_to_playlist(playlist_id, clip_id)
+
+    def _on_delete_playlist(self, playlist_id: str):
+        if self._doc:
+            self._doc.delete_playlist(playlist_id)
 
     def _on_export_requested(self, playlist_id: str):
         from videotagger.ui.dialogs.export_dialog import ExportDialog
-        dlg = ExportDialog(self._project, playlist_id, self)
+        dlg = ExportDialog(self._doc.project, playlist_id, self)
         dlg.exec()
 
     def _on_present_requested(self, playlist_id: str):
         from videotagger.ui.presentation_window import PresentationWindow
-        from videotagger.core.playlist_builder import PlaylistBuilder
-        pl = next((p for p in self._project.playlists if p.id == playlist_id), None)
+        if not self._doc:
+            return
+        pl = next((p for p in self._doc.project.playlists if p.id == playlist_id), None)
         if pl is None:
             return
-        clips = PlaylistBuilder(self._project).get_clips(playlist_id)
-        category_map = {cat.id: cat.name for cat in self._project.categories}
+        clips = self._doc.clips_of(playlist_id)
+        category_map = {cat.id: cat.name for cat in self._doc.project.categories}
         # Cleanly destroy any previous presentation window before creating a new
         # one — the old QMediaPlayer must be stopped before its parent widget is
         # garbage-collected, otherwise Qt's C++ layer crashes.
@@ -447,7 +546,7 @@ class MainWindow(QMainWindow):
             self._presentation.deleteLater()
             self._presentation = None
         self._presentation = PresentationWindow(
-            self._project.merged_video_path, clips, pl.name, category_map, self
+            self._doc.project.merged_video_path, clips, pl.name, category_map, self
         )
         self._presentation.closed.connect(self._on_presentation_closed)
         self._presentation.showFullScreen()
@@ -458,16 +557,13 @@ class MainWindow(QMainWindow):
             self._presentation = None
 
     def _import_timestamps(self):
-        if not self._project:
+        if not self._doc:
             return
         from videotagger.ui.dialogs.import_timestamps_dialog import ImportTimestampsDialog
-        dlg = ImportTimestampsDialog(self._project, self)
+        dlg = ImportTimestampsDialog(self._doc.project, self)
         if dlg.exec():
             clips = dlg.clips()
-            self._project.clips.extend(clips)
-            self._dirty = True
-            self.timeline.set_project(self._project)
-            self.clips_panel.refresh(self._project)
+            self._doc.add_clips(clips)
             self.statusBar().showMessage(f"Imported {len(clips)} clip(s) from timestamps", 3000)
 
     def _toggle_presentation(self):
@@ -475,7 +571,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._save_settings()
-        if self._project and self._dirty:
+        if self._doc and self._doc.is_dirty:
             from PyQt6.QtWidgets import QMessageBox
             reply = QMessageBox.question(
                 self, "Unsaved Changes",
@@ -494,27 +590,43 @@ class MainWindow(QMainWindow):
     def _choose_team_color(self):
         from PyQt6.QtWidgets import QColorDialog
         from PyQt6.QtGui import QColor
-        current = getattr(self, "_accent_color", "#00b09b")
+        current = getattr(self, "_accent_color", theme.ACCENT)
         color = QColorDialog.getColor(QColor(current), self, "Choose Team Accent Color")
         if color.isValid():
             self._accent_color = color.name()
             self._apply_accent(self._accent_color)
 
+    def _badge_style(self) -> str:
+        return (
+            f"background: {theme.shade(theme.ACCENT, 0.16)}; color: {theme.ACCENT};"
+            f"font-family: {theme.FONT_MONO}; font-size: 7.5pt;"
+            f"font-weight: 600; letter-spacing: 1px;"
+            f"border: 1px solid {theme.ACCENT_DIM}; border-radius: 4px;"
+            f"padding: 2px 6px;"
+        )
+
     def _apply_accent(self, accent: str):
+        """Apply an accent across the whole UI — stylesheet and inline-styled widgets."""
+        theme.set_accent(accent)
         from videotagger.ui.style import build_stylesheet
         self.setStyleSheet(build_stylesheet(accent))
+        # Restyle the inline-accent widgets the stylesheet doesn't reach.
+        self._version_badge.setStyleSheet(self._badge_style())
+        self._apply_logo_tint()
+        self._refresh_wordmark()
+        self._apply_window_icon()
+        self.player.apply_accent()
+        self.shortcut_bar.set_idle()
+        self.timeline.update()
 
     def _restore_settings(self):
-        from videotagger.data.settings_manager import SettingsManager
         import base64
-        s = SettingsManager.load()
+        s = self._settings
         if "geometry" in s:
             from PyQt6.QtCore import QByteArray
             self.restoreGeometry(QByteArray(base64.b64decode(s["geometry"])))
         self._recent_files = s.get("recent_files", [])
-        self._accent_color = s.get("accent_color", "#00b09b")
-        if self._accent_color != "#00b09b":
-            self._apply_accent(self._accent_color)
+        # Accent was already resolved and applied in __init__.
 
     def _save_settings(self):
         from videotagger.data.settings_manager import SettingsManager
@@ -522,5 +634,5 @@ class MainWindow(QMainWindow):
         SettingsManager.save({
             "geometry": base64.b64encode(bytes(self.saveGeometry())).decode(),
             "recent_files": getattr(self, "_recent_files", []),
-            "accent_color": getattr(self, "_accent_color", "#00b09b"),
+            "accent_color": getattr(self, "_accent_color", theme.ACCENT),
         })

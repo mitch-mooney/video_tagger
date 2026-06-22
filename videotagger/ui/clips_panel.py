@@ -5,7 +5,21 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QHeaderView, QAbstractItemView, QMenu, QLineEdit, QLabel
 )
 from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush, QIcon
 from videotagger.models.project import Project
+
+
+def _swatch(color: str, size: int = 11) -> QIcon:
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor(color)))
+    p.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3)
+    p.end()
+    return QIcon(pm)
+
 
 class ClipsPanel(QWidget):
     clip_selected = pyqtSignal(str)
@@ -14,6 +28,8 @@ class ClipsPanel(QWidget):
     present_requested = pyqtSignal(str)
     new_playlist_requested = pyqtSignal()
     filter_changed = pyqtSignal(str)
+    add_clips_to_playlist_requested = pyqtSignal(str, list)  # (playlist_id, [clip_id, ...])
+    delete_playlist_requested = pyqtSignal(str)              # (playlist_id)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -97,6 +113,8 @@ class ClipsPanel(QWidget):
             self._clips_table.insertRow(row)
             cat = cat_map.get(clip.category_id)
             item0 = QTableWidgetItem(cat.name if cat else "")
+            if cat:
+                item0.setIcon(_swatch(cat.color))
             item0.setData(Qt.ItemDataRole.UserRole, clip.id)
             self._clips_table.setItem(row, 0, item0)
             self._clips_table.setItem(row, 1, QTableWidgetItem(clip.label))
@@ -163,11 +181,7 @@ class ClipsPanel(QWidget):
             if chosen.data() == "__new__":
                 self.new_playlist_requested.emit()
             else:
-                from videotagger.core.playlist_builder import PlaylistBuilder
-                builder = PlaylistBuilder(self._project)
-                for clip_id in clip_ids:
-                    builder.add_clip(chosen.data(), clip_id)
-                self._refresh_playlists()
+                self.add_clips_to_playlist_requested.emit(chosen.data(), clip_ids)
 
     def _playlists_context_menu(self, pos):
         item = self._playlists_list.itemAt(pos)
@@ -185,9 +199,7 @@ class ClipsPanel(QWidget):
         elif chosen == export_act:
             self.export_requested.emit(pl_id)
         elif chosen == delete_act:
-            from videotagger.core.playlist_builder import PlaylistBuilder
-            PlaylistBuilder(self._project).delete_playlist(pl_id)
-            self._refresh_playlists()
+            self.delete_playlist_requested.emit(pl_id)
 
     @staticmethod
     def _fmt(seconds: float) -> str:
