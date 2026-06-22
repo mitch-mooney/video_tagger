@@ -1,7 +1,7 @@
 # tests/test_angle_sync.py
 from videotagger.core.angle_sync import (
-    DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, map_to_angle,
-    needs_resync,
+    DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, build_periods,
+    map_to_angle, needs_resync,
 )
 from videotagger.models.project import Period, VideoAngle
 
@@ -148,6 +148,30 @@ def test_build_angle_reuses_existing_angle_id():
         [], name="B", source_paths=["b.mp4"], merged_path="b.mp4", existing_angle_id="a1",
     )
     assert angle.id == "a1"
+
+
+# ── build_periods (canonical periods from table marks; no angle) ──────────────
+
+def test_build_periods_basic():
+    marks = [PeriodMark(name="Q1", primary_start=10.0), PeriodMark(name="Q2", primary_start=1000.0)]
+    periods = build_periods(marks)
+    assert [p.name for p in periods] == ["Q1", "Q2"]
+    assert [p.primary_start for p in periods] == [10.0, 1000.0]
+
+
+def test_build_periods_blank_name_and_none_primary():
+    periods = build_periods([PeriodMark(name="", primary_start=None)])
+    assert periods[0].name == "P1"
+    assert periods[0].primary_start == 0.0
+
+
+def test_build_periods_reuses_id():
+    periods = build_periods([PeriodMark(name="Q1", primary_start=1.0, period_id="p1")])
+    assert periods[0].id == "p1"
+
+
+def test_build_periods_empty():
+    assert build_periods([]) == []
 
 
 # ── needs_resync (the secondary-angle drift decision) ─────────────────────────

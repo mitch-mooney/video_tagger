@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QIcon
 from videotagger.models.project import Project
 from videotagger.core.project_document import ProjectDocument
+from videotagger.ui import theme
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -16,6 +17,12 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
         self._doc: ProjectDocument | None = None
         self._signals_wired = False
+        # Resolve the accent BEFORE building the UI so inline-styled widgets
+        # (header, transport, keycaps) build in the same accent the stylesheet uses.
+        from videotagger.data.settings_manager import SettingsManager
+        self._settings = SettingsManager.load()
+        self._accent_color = self._settings.get("accent_color", theme.DEFAULT_ACCENT)
+        theme.set_accent(self._accent_color)
         self._apply_style()
         self._setup_ui()
         self._setup_menu()
@@ -23,11 +30,46 @@ class MainWindow(QMainWindow):
         self._restore_settings()
 
     def _apply_style(self):
-        from videotagger.ui.style import APP_STYLESHEET
-        self.setStyleSheet(APP_STYLESHEET)
-        logo_path = self._resource_path("logo.png")
-        if logo_path:
-            self.setWindowIcon(QIcon(logo_path))
+        from videotagger.ui.style import build_stylesheet
+        self.setStyleSheet(build_stylesheet(theme.ACCENT))
+        self._apply_window_icon()
+
+    @staticmethod
+    def _tint_pixmap(src: QPixmap, color: str) -> QPixmap:
+        """Tint a grayscale+alpha pixmap by accent (accent × luminance), preserving alpha."""
+        from PyQt6.QtGui import QPainter, QColor
+        out = QPixmap(src.size())
+        out.fill(Qt.GlobalColor.transparent)
+        p = QPainter(out)
+        p.drawPixmap(0, 0, src)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+        p.fillRect(out.rect(), QColor(color))
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        p.drawPixmap(0, 0, src)  # restore the master's alpha
+        p.end()
+        return out
+
+    def _apply_logo_tint(self):
+        if getattr(self, "_logo_master", None) is None or self._logo_master.isNull():
+            return
+        src = self._logo_master.scaledToHeight(42, Qt.TransformationMode.SmoothTransformation)
+        self._logo_lbl.setPixmap(self._tint_pixmap(src, theme.ACCENT))
+
+    def _refresh_wordmark(self):
+        self._title_label.setText(
+            f'<span style="color:{theme.TEXT};">VIDEO</span>'
+            f'<span style="color:{theme.ACCENT};">TAGGER</span>'
+        )
+
+    def _apply_window_icon(self):
+        logo_path = self._resource_path("logo_mark.png")
+        if not logo_path:
+            return
+        master = QPixmap(logo_path)
+        if master.isNull():
+            return
+        src = master.scaledToHeight(256, Qt.TransformationMode.SmoothTransformation)
+        self.setWindowIcon(QIcon(self._tint_pixmap(src, theme.ACCENT)))
 
     @staticmethod
     def _resource_path(filename: str) -> str | None:
@@ -58,45 +100,39 @@ class MainWindow(QMainWindow):
         header = QWidget()
         header.setFixedHeight(52)
         header.setStyleSheet(
-            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "stop:0 #0a0f1a, stop:1 #060911);"
-            "border-bottom: 1px solid #141e2e;"
+            f"background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            f"stop:0 {theme.INK}, stop:1 {theme.INK_DEEP});"
+            f"border-bottom: 1px solid {theme.LINE};"
         )
         header_row = QHBoxLayout(header)
         header_row.setContentsMargins(14, 0, 16, 0)
         header_row.setSpacing(10)
 
-        logo_path = self._resource_path("logo.png")
-        if logo_path:
-            logo_lbl = QLabel()
-            pix = QPixmap(logo_path).scaledToHeight(
-                32, Qt.TransformationMode.SmoothTransformation
-            )
-            logo_lbl.setPixmap(pix)
-            logo_lbl.setStyleSheet("background: transparent;")
-            header_row.addWidget(logo_lbl)
+        self._logo_lbl = QLabel()
+        self._logo_lbl.setStyleSheet("background: transparent;")
+        logo_path = self._resource_path("logo_mark.png")
+        self._logo_master = QPixmap(logo_path) if logo_path else QPixmap()
+        self._apply_logo_tint()
+        header_row.addWidget(self._logo_lbl)
 
-        self._title_label = QLabel("VideoTagger")
+        self._title_label = QLabel()
         self._title_label.setStyleSheet(
-            "background: transparent; color: #e2ecf6;"
-            "font-size: 13pt; font-weight: 700; letter-spacing: 0.5px;"
+            f"background: transparent;"
+            f"font-family: {theme.FONT_DISPLAY}; font-size: 14pt;"
+            f"font-weight: 700; letter-spacing: 1.5px;"
         )
+        self._refresh_wordmark()
         header_row.addWidget(self._title_label)
 
-        version_badge = QLabel("v2.0")
-        version_badge.setStyleSheet(
-            "background: #0d2030; color: #00b09b;"
-            "font-size: 7pt; font-weight: 700; letter-spacing: 1px;"
-            "border: 1px solid #003d4f; border-radius: 3px;"
-            "padding: 1px 6px;"
-        )
-        header_row.addWidget(version_badge)
+        self._version_badge = QLabel("v2.0")
+        self._version_badge.setStyleSheet(self._badge_style())
+        header_row.addWidget(self._version_badge)
         header_row.addStretch()
 
         self._file_label = QLabel("")
         self._file_label.setStyleSheet(
-            "background: transparent; color: #4d6880; font-size: 8pt;"
-            "font-family: 'Cascadia Code', 'Consolas', monospace;"
+            f"background: transparent; color: {theme.FAINT};"
+            f"font-size: 8pt; font-family: {theme.FONT_MONO};"
         )
         header_row.addWidget(self._file_label)
         layout.addWidget(header)
@@ -173,6 +209,10 @@ class MainWindow(QMainWindow):
         file_menu.addAction(quit_act)
 
         video_menu = menubar.addMenu("&Video")
+        self._periods_act = QAction("Manage &Periods…", self)
+        self._periods_act.triggered.connect(self._manage_periods)
+        self._periods_act.setEnabled(False)
+        video_menu.addAction(self._periods_act)
         self._angles_act = QAction("Manage &Angles…", self)
         self._angles_act.triggered.connect(self._manage_angles)
         self._angles_act.setEnabled(False)
@@ -276,6 +316,7 @@ class MainWindow(QMainWindow):
         self._save_act.setEnabled(True)
         self._import_act.setEnabled(True)
         self._package_act.setEnabled(True)
+        self._periods_act.setEnabled(True)
         self._angles_act.setEnabled(True)
         self.setWindowTitle("VideoTagger")
         self._file_label.setText(os.path.basename(project.merged_video_path))
@@ -309,6 +350,15 @@ class MainWindow(QMainWindow):
         else:
             self.player.clear_secondary_angle()
             self.shortcut_bar.set_angle_available(False)
+
+    def _manage_periods(self):
+        if not self._doc:
+            return
+        from videotagger.ui.dialogs.periods_dialog import ManagePeriodsDialog
+        dlg = ManagePeriodsDialog(self._doc, self)
+        if dlg.exec():
+            self._save_act.setEnabled(True)
+            self.statusBar().showMessage("Periods updated", 3000)
 
     def _manage_angles(self):
         if not self._doc:
@@ -540,27 +590,43 @@ class MainWindow(QMainWindow):
     def _choose_team_color(self):
         from PyQt6.QtWidgets import QColorDialog
         from PyQt6.QtGui import QColor
-        current = getattr(self, "_accent_color", "#00b09b")
+        current = getattr(self, "_accent_color", theme.ACCENT)
         color = QColorDialog.getColor(QColor(current), self, "Choose Team Accent Color")
         if color.isValid():
             self._accent_color = color.name()
             self._apply_accent(self._accent_color)
 
+    def _badge_style(self) -> str:
+        return (
+            f"background: {theme.shade(theme.ACCENT, 0.16)}; color: {theme.ACCENT};"
+            f"font-family: {theme.FONT_MONO}; font-size: 7.5pt;"
+            f"font-weight: 600; letter-spacing: 1px;"
+            f"border: 1px solid {theme.ACCENT_DIM}; border-radius: 4px;"
+            f"padding: 2px 6px;"
+        )
+
     def _apply_accent(self, accent: str):
+        """Apply an accent across the whole UI — stylesheet and inline-styled widgets."""
+        theme.set_accent(accent)
         from videotagger.ui.style import build_stylesheet
         self.setStyleSheet(build_stylesheet(accent))
+        # Restyle the inline-accent widgets the stylesheet doesn't reach.
+        self._version_badge.setStyleSheet(self._badge_style())
+        self._apply_logo_tint()
+        self._refresh_wordmark()
+        self._apply_window_icon()
+        self.player.apply_accent()
+        self.shortcut_bar.set_idle()
+        self.timeline.update()
 
     def _restore_settings(self):
-        from videotagger.data.settings_manager import SettingsManager
         import base64
-        s = SettingsManager.load()
+        s = self._settings
         if "geometry" in s:
             from PyQt6.QtCore import QByteArray
             self.restoreGeometry(QByteArray(base64.b64decode(s["geometry"])))
         self._recent_files = s.get("recent_files", [])
-        self._accent_color = s.get("accent_color", "#00b09b")
-        if self._accent_color != "#00b09b":
-            self._apply_accent(self._accent_color)
+        # Accent was already resolved and applied in __init__.
 
     def _save_settings(self):
         from videotagger.data.settings_manager import SettingsManager
@@ -568,5 +634,5 @@ class MainWindow(QMainWindow):
         SettingsManager.save({
             "geometry": base64.b64encode(bytes(self.saveGeometry())).decode(),
             "recent_files": getattr(self, "_recent_files", []),
-            "accent_color": getattr(self, "_accent_color", "#00b09b"),
+            "accent_color": getattr(self, "_accent_color", theme.ACCENT),
         })

@@ -75,6 +75,24 @@ class PeriodMark:
     period_id: Optional[str] = None
 
 
+def build_periods(marks: List[PeriodMark]) -> List[Period]:
+    """Build canonical :class:`Period` objects from table marks. Pure — no Qt.
+
+    Blank names fall back to ``P{n}`` (1-based); a missing ``primary_start`` is ``0.0``;
+    a mark's ``period_id`` is reused when editing, otherwise a fresh id is assigned.
+    """
+    periods: List[Period] = []
+    for i, mark in enumerate(marks):
+        period = Period(
+            name=(mark.name or f"P{i + 1}").strip(),
+            primary_start=mark.primary_start or 0.0,
+        )
+        if mark.period_id:
+            period.id = mark.period_id
+        periods.append(period)
+    return periods
+
+
 def build_angle(
     marks: List[PeriodMark],
     *,
@@ -87,21 +105,14 @@ def build_angle(
 
     The inverse of what :func:`map_to_angle` consumes: each mark becomes a canonical
     :class:`Period`, and the angle's ``period_starts`` maps each period id to its start
-    time in the secondary footage. Pure — no Qt. Blank names fall back to ``P{n}`` (1-based);
-    a missing ``primary_start`` is ``0.0``; marks without a ``secondary_start`` are left out
-    of ``period_starts``; a blank angle name falls back to ``"Angle 2"`` and empty
-    ``source_paths`` falls back to ``[merged_path]``.
+    time in the secondary footage. Pure — no Qt. Marks without a ``secondary_start`` are
+    left out of ``period_starts``; a blank angle name falls back to ``"Angle 2"`` and empty
+    ``source_paths`` falls back to ``[merged_path]``. (Period naming/id rules: see
+    :func:`build_periods`.)
     """
-    periods: List[Period] = []
+    periods = build_periods(marks)
     period_starts: dict = {}
-    for i, mark in enumerate(marks):
-        period = Period(
-            name=(mark.name or f"P{i + 1}").strip(),
-            primary_start=mark.primary_start or 0.0,
-        )
-        if mark.period_id:
-            period.id = mark.period_id
-        periods.append(period)
+    for mark, period in zip(marks, periods):
         if mark.secondary_start is not None:
             period_starts[period.id] = mark.secondary_start
 

@@ -7,12 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Blank video preview** in the Manage Periods / Manage Angles dialogs — the preview now
+  plays briefly to decode the first frame before pausing, instead of pausing before the
+  media has loaded (which left the surface black on Windows).
+
 ### Changed
 - **Audio is now always stripped** from the project working video and all
   exports (`-an`). Merging source videos produces a video-only file, and both
   per-clip and merged-playlist exports are silent.
 
 ### Added
+- **Manage Periods** — mark match periods (quarters/halves) on any project via
+  **Video ▸ Manage Periods…** without needing a second camera angle. Scrub the preview,
+  capture each period's start, and the timeline ribbon draws `Q1`–`Q4` dividers. The same
+  period data feeds the dual-angle sync.
+- **Broadcast Studio UI** — refined dark facelift: three-tier surface depth, a signature
+  electric-teal accent with an amber "marking" signal, condensed display headers and tabular
+  mono timecodes, category colour dots in the tags tree and clips table, period dividers on
+  the timeline, visible focus rings, and a unified spacing scale. The team-colour accent
+  (**Settings ▸ Team Color**) now applies consistently across the whole interface.
 - **Dual camera angles with per-period sync** — load a second angle (e.g. broadcast
   vision alongside behind-goals) via **Video ▸ Manage Angles…**, mark where each
   quarter/period starts in both videos, then press **`V`** to switch angles instantly

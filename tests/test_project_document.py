@@ -108,6 +108,16 @@ def test_set_secondary_angle(doc):
     assert spy.count == 1
 
 
+def test_set_periods(doc):
+    spy = Spy()
+    doc.subscribe(spy)
+    periods = [Period(name="Q1", primary_start=0.0), Period(name="Q2", primary_start=600.0)]
+    doc.set_periods(periods)
+    assert doc.project.periods == periods
+    assert doc.is_dirty is True
+    assert spy.count == 1
+
+
 def test_clear_secondary_angle(doc):
     doc.set_secondary_angle([Period(name="Q1", primary_start=0.0)], VideoAngle(name="B"))
     spy = Spy()

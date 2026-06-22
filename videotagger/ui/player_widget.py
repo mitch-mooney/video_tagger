@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from videotagger.ui.zoomable_video_view import ZoomableVideoView
+from videotagger.ui import theme
 from videotagger.core.angle_sync import needs_resync
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QSlider, QStackedWidget, QVBoxLayout, QWidget,
@@ -54,8 +55,8 @@ class PlayerWidget(QWidget):
         ctrl_widget = QWidget()
         ctrl_widget.setStyleSheet(
             "background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "stop:0 #080c14, stop:1 #060911);"
-            "border-top: 1px solid #141e2e;"
+            f"stop:0 {theme.INK}, stop:1 {theme.INK_DEEP});"
+            f"border-top: 1px solid {theme.LINE};"
         )
         ctrl_widget.setFixedHeight(42)
         ctrl = QHBoxLayout(ctrl_widget)
@@ -65,21 +66,21 @@ class PlayerWidget(QWidget):
         self._play_btn = QPushButton("▶")
         self._play_btn.setFixedSize(34, 28)
         self._play_btn.setStyleSheet(
-            "QPushButton { background: #00b09b; color: #000; border: none;"
-            " border-radius: 14px; font-size: 10pt; font-weight: bold; }"
-            "QPushButton:hover { background: #00d4b8; }"
-            "QPushButton:pressed { background: #008f7e; }"
+            f"QPushButton {{ background: {theme.ACCENT}; color: #04231e; border: none;"
+            " border-radius: 14px; font-size: 11pt; font-weight: bold; }"
+            f"QPushButton:hover {{ background: {theme.ACCENT_LIGHT}; }}"
+            f"QPushButton:pressed {{ background: {theme.ACCENT_DIM}; }}"
         )
         self._play_btn.clicked.connect(self.toggle_play)
         ctrl.addWidget(self._play_btn)
 
-        mono = QFont("Cascadia Code", 8)
+        mono = QFont("Cascadia Mono", 8)
         mono.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
 
         self._pos_label = QLabel("00:00:00")
         self._pos_label.setFont(mono)
         self._pos_label.setStyleSheet(
-            "color: #00b09b; background: transparent; min-width: 60px;"
+            f"color: {theme.ACCENT}; background: transparent; min-width: 64px;"
             "letter-spacing: 0.5px;"
         )
         ctrl.addWidget(self._pos_label)
@@ -92,7 +93,7 @@ class PlayerWidget(QWidget):
         self._dur_label = QLabel("00:00:00")
         self._dur_label.setFont(mono)
         self._dur_label.setStyleSheet(
-            "color: #4d6880; background: transparent; min-width: 60px;"
+            f"color: {theme.FAINT}; background: transparent; min-width: 64px;"
             "letter-spacing: 0.5px;"
         )
         ctrl.addWidget(self._dur_label)
@@ -101,10 +102,10 @@ class PlayerWidget(QWidget):
         self._angle_btn = QPushButton()
         self._angle_btn.setFont(mono)
         self._angle_btn.setStyleSheet(
-            "QPushButton { color: #00b09b; background: #0a0f1a;"
-            " border: 1px solid #1a2840; border-radius: 4px; padding: 2px 8px;"
+            f"QPushButton {{ color: {theme.ACCENT}; background: {theme.SURFACE_2};"
+            f" border: 1px solid {theme.LINE}; border-radius: 5px; padding: 3px 9px;"
             " font-size: 8pt; }"
-            "QPushButton:hover { border-color: #00b09b; }"
+            f"QPushButton:hover {{ border-color: {theme.ACCENT}; }}"
         )
         self._angle_btn.clicked.connect(self.switch_angle)
         self._angle_btn.setVisible(False)
@@ -114,14 +115,36 @@ class PlayerWidget(QWidget):
         self._speed_label.setFixedWidth(46)
         self._speed_label.setFont(mono)
         self._speed_label.setStyleSheet(
-            "color: #4d6880; background: #0a0f1a; border: 1px solid #1a2840;"
-            " border-radius: 4px; padding: 2px 5px; font-size: 8pt;"
+            f"color: {theme.MUTED}; background: {theme.SURFACE_2}; border: 1px solid {theme.LINE};"
+            " border-radius: 5px; padding: 3px 6px; font-size: 8pt;"
         )
         ctrl.addWidget(self._speed_label)
 
         layout.addWidget(ctrl_widget)
 
     # ── Public API ──────────────────────────────────────────────────────
+
+    def apply_accent(self) -> None:
+        """Re-apply accent-coloured inline styles after a team-colour change.
+
+        (The seek slider and other accent chrome are handled by the global
+        stylesheet; these three controls style themselves inline.)"""
+        self._play_btn.setStyleSheet(
+            f"QPushButton {{ background: {theme.ACCENT}; color: #04231e; border: none;"
+            " border-radius: 14px; font-size: 11pt; font-weight: bold; }"
+            f"QPushButton:hover {{ background: {theme.ACCENT_LIGHT}; }}"
+            f"QPushButton:pressed {{ background: {theme.ACCENT_DIM}; }}"
+        )
+        self._pos_label.setStyleSheet(
+            f"color: {theme.ACCENT}; background: transparent; min-width: 64px;"
+            "letter-spacing: 0.5px;"
+        )
+        self._angle_btn.setStyleSheet(
+            f"QPushButton {{ color: {theme.ACCENT}; background: {theme.SURFACE_2};"
+            f" border: 1px solid {theme.LINE}; border-radius: 5px; padding: 3px 9px;"
+            " font-size: 8pt; }"
+            f"QPushButton:hover {{ border-color: {theme.ACCENT}; }}"
+        )
 
     def load(self, path: str) -> None:
         self._player.setSource(QUrl.fromLocalFile(path))

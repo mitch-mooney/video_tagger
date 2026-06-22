@@ -69,6 +69,12 @@ class ProjectDocument:
         self._changed()
         return clip
 
+    # ── periods ──────────────────────────────────────────────────────────
+
+    def set_periods(self, periods: List[Period]) -> None:
+        self._project.periods = list(periods)
+        self._changed()
+
     # ── secondary angle ──────────────────────────────────────────────────
 
     def set_secondary_angle(self, periods: List[Period], angle: VideoAngle) -> None:

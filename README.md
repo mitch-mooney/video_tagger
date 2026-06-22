@@ -62,6 +62,7 @@ Then double-click normally to launch.
 - **Dual camera angles** — load a second angle (e.g. broadcast vision alongside behind-goals), sync them at each quarter/period start, and switch instantly with `V` while playing — both angles decode in lockstep for seamless switching
 - **Tag clips** — press `I` to mark start, `O` to mark end; assign a category, label, and optional notes
 - **Timeline view** — colour-coded clip markers with clickable seek and notes indicators
+- **Match periods** — mark quarter/half starts via **Video → Manage Periods** to show `Q1`–`Q4` dividers on the timeline
 - **Tag Manager** — create, rename, delete categories and labels; save and load templates
 - **Built-in AFL template** — Offence, Defence, Stoppages, General (with labels pre-filled)
 - **Playlists** — build clip playlists; add clips via right-click context menu
@@ -141,6 +142,21 @@ Right-click a playlist and choose **Present**. The window goes full-screen and p
 - Use `Space` or the on-screen buttons to pause/play.
 - Press `N` to pin the current clip's notes on screen.
 - Press `Escape` or `F11` to exit.
+
+---
+
+## Periods (Quarters)
+
+Divide the match into periods so the timeline shows `Q1`–`Q4` dividers — useful for navigation,
+and reused by the dual-angle sync.
+
+1. With a project open, go to **Video → Manage Periods…**.
+2. The dialog opens with `Q1`–`Q4` pre-filled and a scrubbable preview. Scrub to the exact
+   frame each period begins, select that period's row, and click **Set Start @ Playhead**.
+   Add or remove rows for halves or extra periods.
+3. Click **OK** — the dividers appear on the timeline immediately. Save to keep them in the `.vtp`.
+
+Works on any project — no second camera angle required.
 
 ---
 

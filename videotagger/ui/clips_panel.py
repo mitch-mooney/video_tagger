@@ -5,7 +5,21 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QHeaderView, QAbstractItemView, QMenu, QLineEdit, QLabel
 )
 from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush, QIcon
 from videotagger.models.project import Project
+
+
+def _swatch(color: str, size: int = 11) -> QIcon:
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor(color)))
+    p.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3)
+    p.end()
+    return QIcon(pm)
+
 
 class ClipsPanel(QWidget):
     clip_selected = pyqtSignal(str)
@@ -99,6 +113,8 @@ class ClipsPanel(QWidget):
             self._clips_table.insertRow(row)
             cat = cat_map.get(clip.category_id)
             item0 = QTableWidgetItem(cat.name if cat else "")
+            if cat:
+                item0.setIcon(_swatch(cat.color))
             item0.setData(Qt.ItemDataRole.UserRole, clip.id)
             self._clips_table.setItem(row, 0, item0)
             self._clips_table.setItem(row, 1, QTableWidgetItem(clip.label))

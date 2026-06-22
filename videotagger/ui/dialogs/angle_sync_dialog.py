@@ -30,6 +30,7 @@ class _Preview(QWidget):
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self._duration = 0.0
+        self._pending_pause = False
         self._player = QMediaPlayer(self)
 
         layout = QVBoxLayout(self)
@@ -63,10 +64,22 @@ class _Preview(QWidget):
 
         self._player.positionChanged.connect(self._on_position)
         self._player.durationChanged.connect(self._on_duration)
+        self._player.mediaStatusChanged.connect(self._on_media_status)
 
     def load(self, path: str) -> None:
+        # Play briefly so the first frame decodes and renders, then hold on it.
+        # Pausing before the media has loaded leaves the surface blank on Windows.
         self._player.setSource(QUrl.fromLocalFile(path))
-        self._player.pause()
+        self._pending_pause = True
+        self._player.play()
+
+    def _on_media_status(self, status) -> None:
+        if self._pending_pause and status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        ):
+            self._pending_pause = False
+            self._player.pause()
 
     def position(self) -> float:
         return self._player.position() / 1000.0
