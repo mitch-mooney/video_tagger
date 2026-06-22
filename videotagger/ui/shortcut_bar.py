@@ -60,14 +60,27 @@ class ShortcutBar(QWidget):
         self._state_label = QLabel()
         self._state_label.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self._state_label)
+        self._has_angle = False
+        self._is_idle = True
         self.set_idle()
 
+    def set_angle_available(self, available: bool):
+        """Show/hide the angle-switch hint when a second camera angle is loaded."""
+        self._has_angle = available
+        if self._is_idle:
+            self.set_idle()
+
     def set_idle(self):
-        hints = "&nbsp; &nbsp;".join(_hint(k, v) for k, v in _IDLE_HINTS)
-        self._label.setText(hints)
+        self._is_idle = True
+        hints = list(_IDLE_HINTS)
+        if self._has_angle:
+            hints.append(("V", "Angle"))
+        text = "&nbsp; &nbsp;".join(_hint(k, v) for k, v in hints)
+        self._label.setText(text)
         self._state_label.setText("")
 
     def set_marking(self, start_time: float):
+        self._is_idle = False
         hints = "&nbsp; &nbsp;".join(_hint(k, v) for k, v in _MARKING_HINTS)
         self._label.setText(hints)
         self._state_label.setText(

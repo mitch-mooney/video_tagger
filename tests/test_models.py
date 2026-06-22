@@ -1,5 +1,7 @@
 import pytest
-from videotagger.models.project import Category, Clip, Playlist, Project
+from videotagger.models.project import (
+    Category, Clip, Playlist, Period, VideoAngle, Project,
+)
 from videotagger.models.project import project_to_dict, project_from_dict
 
 
@@ -31,11 +33,33 @@ def test_project_v2_round_trip():
     assert proj2.clips[0].start == 10.5
     assert proj2.clips[0].notes == "Great goal"
     assert proj2.playlists[0].name == "Best Goals"
-    assert proj2.version == 2
+    assert proj2.version == 3
+
+
+def test_project_angles_and_periods_round_trip():
+    period = Period(name="Q1", primary_start=12.5)
+    angle = VideoAngle(
+        name="Broadcast",
+        source_video_paths=["C:/bc_q1.mp4", "C:/bc_q2.mp4"],
+        merged_video_path="C:/bc_merged.mp4",
+        period_starts={period.id: 3.0},
+    )
+    proj = Project(
+        source_video_paths=["C:/primary.mp4"],
+        merged_video_path="C:/primary.mp4",
+        periods=[period], angles=[angle],
+    )
+    proj2 = project_from_dict(project_to_dict(proj))
+    assert proj2.periods[0].name == "Q1"
+    assert proj2.periods[0].primary_start == 12.5
+    assert proj2.angles[0].name == "Broadcast"
+    assert proj2.angles[0].source_video_paths == ["C:/bc_q1.mp4", "C:/bc_q2.mp4"]
+    assert proj2.angles[0].merged_video_path == "C:/bc_merged.mp4"
+    assert proj2.angles[0].period_starts == {period.id: 3.0}
 
 
 def test_project_from_v1_dict_migrates():
-    """v1 .vtp files (video_path key) are transparently upgraded to v2."""
+    """v1 .vtp files (video_path key) are transparently upgraded."""
     d = {
         "version": 1,
         "video_path": "C:/old_game.mp4",
@@ -46,7 +70,23 @@ def test_project_from_v1_dict_migrates():
     proj = project_from_dict(d)
     assert proj.source_video_paths == ["C:/old_game.mp4"]
     assert proj.merged_video_path == "C:/old_game.mp4"
-    assert proj.version == 2
+    assert proj.version == 3
+
+
+def test_project_from_v2_dict_has_empty_periods_and_angles():
+    """v2 .vtp files (no periods/angles keys) upgrade to v3 with empty lists."""
+    d = {
+        "version": 2,
+        "source_video_paths": ["C:/v.mp4"],
+        "merged_video_path": "C:/v.mp4",
+        "categories": [],
+        "clips": [],
+        "playlists": [],
+    }
+    proj = project_from_dict(d)
+    assert proj.periods == []
+    assert proj.angles == []
+    assert proj.version == 3
 
 
 def test_project_from_dict_missing_notes_defaults_empty():

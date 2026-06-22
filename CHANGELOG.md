@@ -13,6 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per-clip and merged-playlist exports are silent.
 
 ### Added
+- **Dual camera angles with per-period sync** — load a second angle (e.g. broadcast
+  vision alongside behind-goals) via **Video ▸ Manage Angles…**, mark where each
+  quarter/period starts in both videos, then press **`V`** to switch angles instantly
+  while playing. Both angles decode in lockstep (seamless switching, no reload) and
+  re-sync at every period boundary, so a continuous recording and a per-quarter one stay
+  aligned. Clips are shared across angles; existing single-angle projects are unaffected.
 - **Live zoom & pan** in the main player and Presentation Mode — scroll wheel or
   `+` / `-` to zoom (centered on the cursor for the wheel), click-drag to pan, and
   `0` to reset to the full frame. Useful for inspecting a region of high-resolution

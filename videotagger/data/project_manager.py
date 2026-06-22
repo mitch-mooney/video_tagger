@@ -28,7 +28,17 @@ class ProjectManager:
                 os.path.join(vtp_dir, project.merged_video_path)
             )
         project.source_video_paths = [
-            os.path.normpath(os.path.join(vtp_dir, p)) if not os.path.isabs(p) else p
-            for p in project.source_video_paths
+            _resolve(vtp_dir, p) for p in project.source_video_paths
         ]
+        for angle in project.angles:
+            angle.merged_video_path = _resolve(vtp_dir, angle.merged_video_path)
+            angle.source_video_paths = [
+                _resolve(vtp_dir, p) for p in angle.source_video_paths
+            ]
         return project
+
+
+def _resolve(base_dir: str, path: str) -> str:
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.normpath(os.path.join(base_dir, path))

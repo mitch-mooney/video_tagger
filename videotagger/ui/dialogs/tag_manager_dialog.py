@@ -1,20 +1,22 @@
 # videotagger/ui/dialogs/tag_manager_dialog.py
 from __future__ import annotations
+import copy
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QInputDialog, QColorDialog, QMessageBox, QLabel,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
-from videotagger.models.project import Category, Project
+from videotagger.models.project import Category
 from videotagger.data.template_manager import TemplateManager
 
 class TagManagerDialog(QDialog):
-    def __init__(self, project: Project, parent=None):
+    def __init__(self, doc, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Manage Tags")
         self.resize(600, 400)
-        self._project = project
+        self._doc = doc
+        self._categories = copy.deepcopy(doc.project.categories)
         self._selected_cat: Category | None = None
         self._setup_ui()
         self._refresh_categories()
@@ -60,7 +62,7 @@ class TagManagerDialog(QDialog):
         load_tmpl = QPushButton("Load Template...")
         load_tmpl.clicked.connect(self._load_template)
         close_btn = QPushButton("Done")
-        close_btn.clicked.connect(self.accept)
+        close_btn.clicked.connect(self._commit)
         btm.addWidget(save_tmpl)
         btm.addWidget(load_tmpl)
         btm.addStretch()
@@ -69,7 +71,7 @@ class TagManagerDialog(QDialog):
 
     def _refresh_categories(self):
         self._cat_list.clear()
-        for cat in self._project.categories:
+        for cat in self._categories:
             item = QListWidgetItem(cat.name)
             item.setData(Qt.ItemDataRole.UserRole, cat.id)
             item.setForeground(QColor(cat.color))
@@ -87,7 +89,7 @@ class TagManagerDialog(QDialog):
             self._selected_cat = None
             return
         cat_id = current.data(Qt.ItemDataRole.UserRole)
-        self._selected_cat = next((c for c in self._project.categories if c.id == cat_id), None)
+        self._selected_cat = next((c for c in self._categories if c.id == cat_id), None)
         self._refresh_labels()
 
     def _add_category(self):
@@ -97,7 +99,7 @@ class TagManagerDialog(QDialog):
         color = QColorDialog.getColor(QColor("#888888"), self, "Choose color")
         if not color.isValid():
             return
-        self._project.categories.append(Category(name=name.strip(), color=color.name()))
+        self._categories.append(Category(name=name.strip(), color=color.name()))
         self._refresh_categories()
 
     def _rename_category(self):
@@ -113,8 +115,8 @@ class TagManagerDialog(QDialog):
             return
         if QMessageBox.question(self, "Delete", f"Delete '{self._selected_cat.name}'?") \
                 == QMessageBox.StandardButton.Yes:
-            self._project.categories = [
-                c for c in self._project.categories if c.id != self._selected_cat.id
+            self._categories = [
+                c for c in self._categories if c.id != self._selected_cat.id
             ]
             self._selected_cat = None
             self._refresh_categories()
@@ -157,7 +159,7 @@ class TagManagerDialog(QDialog):
     def _save_template(self):
         name, ok = QInputDialog.getText(self, "Save Template", "Template name:")
         if ok and name.strip():
-            TemplateManager.save_user(name.strip(), self._project.categories)
+            TemplateManager.save_user(name.strip(), self._categories)
             QMessageBox.information(self, "Saved", f"Template '{name}' saved.")
 
     def _load_template(self):
@@ -172,7 +174,7 @@ class TagManagerDialog(QDialog):
         )
         if not ok:
             return
-        if self._project.clips:
+        if self._doc.project.clips:
             reply = QMessageBox.question(
                 self, "Load Template",
                 "Loading a template replaces current categories. Continue?"
@@ -183,7 +185,11 @@ class TagManagerDialog(QDialog):
             cats = TemplateManager.load_builtin(choice.replace("[Built-in] ", ""))
         else:
             cats = TemplateManager.load_user(choice.replace("[Custom] ", ""))
-        self._project.categories = cats
+        self._categories = cats
         self._selected_cat = None
         self._refresh_categories()
         self._refresh_labels()
+
+    def _commit(self):
+        self._doc.set_categories(self._categories)
+        self.accept()

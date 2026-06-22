@@ -59,6 +59,7 @@ Then double-click normally to launch.
 
 - **Open video files** — `.mp4`, `.mov`, `.avi`, `.mkv`, `.m4v`
 - **Multi-file projects** — load a match split across multiple files; VideoTagger merges them into one continuous timeline via FFmpeg automatically
+- **Dual camera angles** — load a second angle (e.g. broadcast vision alongside behind-goals), sync them at each quarter/period start, and switch instantly with `V` while playing — both angles decode in lockstep for seamless switching
 - **Tag clips** — press `I` to mark start, `O` to mark end; assign a category, label, and optional notes
 - **Timeline view** — colour-coded clip markers with clickable seek and notes indicators
 - **Tag Manager** — create, rename, delete categories and labels; save and load templates
@@ -88,6 +89,7 @@ Then double-click normally to launch.
 | `+` / `-` | Zoom in / out (or scroll wheel over the video) |
 | `0` | Reset zoom to full frame |
 | Click + drag | Pan the zoomed view |
+| `V` | Switch camera angle (when a second angle is loaded) |
 | `Ctrl+N` | New project |
 | `Ctrl+O` | Open project |
 | `Ctrl+S` | Save project |
@@ -139,6 +141,23 @@ Right-click a playlist and choose **Present**. The window goes full-screen and p
 - Use `Space` or the on-screen buttons to pause/play.
 - Press `N` to pin the current clip's notes on screen.
 - Press `Escape` or `F11` to exit.
+
+---
+
+## Camera Angles
+
+Review the same match from two angles (e.g. behind-goals and broadcast vision) and switch
+between them instantly while playing.
+
+1. With a project open, go to **Video → Manage Angles…**.
+2. Add the second angle's video file(s) and click **Load / Merge Angle** (multiple files are
+   merged just like the primary, e.g. one file per quarter).
+3. The two videos appear side by side. For each period row (Q1–Q4 by default; add/remove/rename
+   as needed), scrub each preview to the exact frame the period begins, select the row, and click
+   **Set Primary @ Playhead** / **Set Second @ Playhead**.
+4. Click **OK**. Back in the main window, press **`V`** to switch angles — both play in lockstep
+   and re-sync at every period boundary, so a continuous recording and a per-quarter one stay
+   aligned. Clips are shared across angles. Save to keep the sync points in the `.vtp`.
 
 ---
 

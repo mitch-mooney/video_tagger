@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
 
 
 def _new_id() -> str:
@@ -33,13 +33,33 @@ class Playlist:
 
 
 @dataclass
+class Period:
+    """A match period (quarter/half) anchored on the primary/canonical timeline."""
+    name: str            # "Q1", "Half 1", ...
+    primary_start: float # video-time (s) where this period begins in the PRIMARY video
+    id: str = field(default_factory=_new_id)
+
+
+@dataclass
+class VideoAngle:
+    """An additional camera angle synced onto the canonical timeline per period."""
+    name: str                          # "Behind Goals"
+    source_video_paths: List[str] = field(default_factory=list)
+    merged_video_path: str = ""        # this angle's working video (via VideoMerger)
+    period_starts: Dict[str, float] = field(default_factory=dict)  # period.id -> video-time (s)
+    id: str = field(default_factory=_new_id)
+
+
+@dataclass
 class Project:
     source_video_paths: List[str]
     merged_video_path: str
     categories: List[Category] = field(default_factory=list)
     clips: List[Clip] = field(default_factory=list)
     playlists: List[Playlist] = field(default_factory=list)
-    version: int = 2
+    periods: List[Period] = field(default_factory=list)   # canonical, primary-relative
+    angles: List[VideoAngle] = field(default_factory=list)  # ADDITIONAL angles beyond primary
+    version: int = 3
 
 
 def project_to_dict(proj: Project) -> dict:
@@ -59,6 +79,17 @@ def project_to_dict(proj: Project) -> dict:
         "playlists": [
             {"id": p.id, "name": p.name, "clip_ids": p.clip_ids}
             for p in proj.playlists
+        ],
+        "periods": [
+            {"id": p.id, "name": p.name, "primary_start": p.primary_start}
+            for p in proj.periods
+        ],
+        "angles": [
+            {"id": a.id, "name": a.name,
+             "source_video_paths": a.source_video_paths,
+             "merged_video_path": a.merged_video_path,
+             "period_starts": a.period_starts}
+            for a in proj.angles
         ],
     }
 
@@ -86,11 +117,26 @@ def project_from_dict(d: dict) -> Project:
         Playlist(id=p["id"], name=p["name"], clip_ids=p["clip_ids"])
         for p in d.get("playlists", [])
     ]
+    periods = [
+        Period(id=p["id"], name=p["name"], primary_start=p["primary_start"])
+        for p in d.get("periods", [])
+    ]
+    angles = [
+        VideoAngle(
+            id=a["id"], name=a["name"],
+            source_video_paths=a.get("source_video_paths", []),
+            merged_video_path=a.get("merged_video_path", ""),
+            period_starts={k: float(v) for k, v in a.get("period_starts", {}).items()},
+        )
+        for a in d.get("angles", [])
+    ]
     return Project(
-        version=2,
+        version=3,
         source_video_paths=source_paths,
         merged_video_path=merged_path,
         categories=categories,
         clips=clips,
         playlists=playlists,
+        periods=periods,
+        angles=angles,
     )

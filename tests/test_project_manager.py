@@ -21,12 +21,12 @@ def test_save_creates_file(tmp_path, sample_project):
     assert path.exists()
 
 
-def test_save_writes_version_2(tmp_path, sample_project):
+def test_save_writes_current_version(tmp_path, sample_project):
     path = tmp_path / "test.vtp"
     ProjectManager.save(sample_project, str(path))
     with open(path) as f:
         data = json.load(f)
-    assert data["version"] == 2
+    assert data["version"] == 3
     assert "source_video_paths" in data
     assert "merged_video_path" in data
 
@@ -71,6 +71,30 @@ def test_load_packaged_relative_path(tmp_path):
     proj = ProjectManager.load(str(vtp_path))
     assert os.path.isabs(proj.merged_video_path)
     assert proj.merged_video_path == str(pkg_dir / "video.mp4")
+
+
+def test_load_resolves_angle_relative_paths(tmp_path):
+    """A secondary angle's relative paths resolve against the .vtp directory."""
+    pkg_dir = tmp_path / "MyGame"
+    pkg_dir.mkdir()
+    vtp_data = {
+        "version": 3,
+        "source_video_paths": ["./primary.mp4"],
+        "merged_video_path": "./primary.mp4",
+        "categories": [], "clips": [], "playlists": [], "periods": [],
+        "angles": [{
+            "id": "a1", "name": "Broadcast",
+            "source_video_paths": ["./bc_q1.mp4"],
+            "merged_video_path": "./bc_merged.mp4",
+            "period_starts": {},
+        }],
+    }
+    vtp_path = pkg_dir / "project.vtp"
+    vtp_path.write_text(json.dumps(vtp_data))
+    proj = ProjectManager.load(str(vtp_path))
+    angle = proj.angles[0]
+    assert angle.merged_video_path == str(pkg_dir / "bc_merged.mp4")
+    assert angle.source_video_paths == [str(pkg_dir / "bc_q1.mp4")]
 
 
 def test_load_missing_file_raises():

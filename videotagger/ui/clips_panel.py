@@ -14,6 +14,8 @@ class ClipsPanel(QWidget):
     present_requested = pyqtSignal(str)
     new_playlist_requested = pyqtSignal()
     filter_changed = pyqtSignal(str)
+    add_clips_to_playlist_requested = pyqtSignal(str, list)  # (playlist_id, [clip_id, ...])
+    delete_playlist_requested = pyqtSignal(str)              # (playlist_id)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -163,11 +165,7 @@ class ClipsPanel(QWidget):
             if chosen.data() == "__new__":
                 self.new_playlist_requested.emit()
             else:
-                from videotagger.core.playlist_builder import PlaylistBuilder
-                builder = PlaylistBuilder(self._project)
-                for clip_id in clip_ids:
-                    builder.add_clip(chosen.data(), clip_id)
-                self._refresh_playlists()
+                self.add_clips_to_playlist_requested.emit(chosen.data(), clip_ids)
 
     def _playlists_context_menu(self, pos):
         item = self._playlists_list.itemAt(pos)
@@ -185,9 +183,7 @@ class ClipsPanel(QWidget):
         elif chosen == export_act:
             self.export_requested.emit(pl_id)
         elif chosen == delete_act:
-            from videotagger.core.playlist_builder import PlaylistBuilder
-            PlaylistBuilder(self._project).delete_playlist(pl_id)
-            self._refresh_playlists()
+            self.delete_playlist_requested.emit(pl_id)
 
     @staticmethod
     def _fmt(seconds: float) -> str:
