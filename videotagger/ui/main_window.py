@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
         self._refresh_wordmark()
         header_row.addWidget(self._title_label)
 
-        self._version_badge = QLabel("v2.0")
+        self._version_badge = QLabel("v2.1")
         self._version_badge.setStyleSheet(self._badge_style())
         header_row.addWidget(self._version_badge)
         header_row.addStretch()

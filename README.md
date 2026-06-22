@@ -2,7 +2,7 @@
 
 A desktop application for tagging and reviewing sporting footage. Open a video, mark clips with keyboard shortcuts, build playlists, and present or export them.
 
-**Current release: v2.0**
+**Current release: v2.1.0**
 
 ---
 
@@ -181,7 +181,6 @@ between them instantly while playing.
 
 Right-click a playlist in the **Playlists** tab and choose **Export**. The export dialog offers four independent options — select any combination:
 
-| Option | Output | Notes |
 |--------|--------|-------|
 | **Individual clip files** | One `.mp4` per clip | Named `{video}_{Category}_{Label}_{001}.mp4`; stream-copied (fast) |
 | **Single merged file** | One `.mp4` for the whole playlist | All clips concatenated in order via FFmpeg |
@@ -205,8 +204,8 @@ Projects are saved as `.vtp` files (plain JSON). Share them with teammates — t
 Push a version tag and GitHub Actions builds both platforms automatically:
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
+git tag v2.1.0
+git push origin v2.1.0
 ```
 
 The workflow builds `VideoTagger.exe` (Windows) and `VideoTagger.app` / `.dmg` (macOS) in parallel and attaches both to a GitHub Release.

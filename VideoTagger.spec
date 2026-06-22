@@ -112,8 +112,8 @@ elif sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'VideoTagger',
             'CFBundleDisplayName': 'VideoTagger',
-            'CFBundleVersion': '2.0.0',
-            'CFBundleShortVersionString': '2.0.0',
+            'CFBundleVersion': '2.1.0',
+            'CFBundleShortVersionString': '2.1.0',
             'NSHighResolutionCapable': True,
             'NSRequiresAquaSystemAppearance': False,
         },

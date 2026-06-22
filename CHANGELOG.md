@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v2.1.0] — 2026-06-22
+
 ### Fixed
 - **Blank video preview** in the Manage Periods / Manage Angles dialogs — the preview now
   plays briefly to decode the first frame before pausing, instead of pausing before the
