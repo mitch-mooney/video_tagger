@@ -97,6 +97,61 @@ def test_load_resolves_angle_relative_paths(tmp_path):
     assert angle.source_video_paths == [str(pkg_dir / "bc_q1.mp4")]
 
 
+def test_save_load_preserves_periods_and_angles(tmp_path):
+    """A full v3 round-trip through save/load preserves periods and angle sync points."""
+    from videotagger.models.project import Period, VideoAngle
+    period = Period(name="Q1", primary_start=12.5)
+    angle = VideoAngle(
+        name="Broadcast",
+        source_video_paths=[str(tmp_path / "bc_q1.mp4")],
+        merged_video_path=str(tmp_path / "bc_merged.mp4"),
+        period_starts={period.id: 3.0},
+    )
+    proj = Project(
+        source_video_paths=[str(tmp_path / "primary.mp4")],
+        merged_video_path=str(tmp_path / "primary.mp4"),
+        periods=[period], angles=[angle],
+    )
+    path = tmp_path / "game.vtp"
+    ProjectManager.save(proj, str(path))
+    loaded = ProjectManager.load(str(path))
+    assert loaded.periods[0].name == "Q1"
+    assert loaded.periods[0].primary_start == 12.5
+    assert loaded.angles[0].name == "Broadcast"
+    assert loaded.angles[0].period_starts == {period.id: 3.0}
+
+
+def test_load_v2_file_upgrades_periods_and_angles(tmp_path):
+    """A v2 .vtp (no periods/angles keys) loads as v3 with empty lists."""
+    data = {
+        "version": 2,
+        "source_video_paths": [str(tmp_path / "v.mp4")],
+        "merged_video_path": str(tmp_path / "v.mp4"),
+        "categories": [], "clips": [], "playlists": [],
+    }
+    path = tmp_path / "v2.vtp"
+    path.write_text(json.dumps(data))
+    proj = ProjectManager.load(str(path))
+    assert proj.periods == []
+    assert proj.angles == []
+
+
+def test_load_missing_notes_defaults_empty(tmp_path):
+    data = {
+        "version": 2,
+        "source_video_paths": [str(tmp_path / "v.mp4")],
+        "merged_video_path": str(tmp_path / "v.mp4"),
+        "categories": [],
+        "clips": [{"id": "c1", "category_id": "cat1", "label": "Goal",
+                   "start": 1.0, "end": 2.0}],
+        "playlists": [],
+    }
+    path = tmp_path / "notes.vtp"
+    path.write_text(json.dumps(data))
+    proj = ProjectManager.load(str(path))
+    assert proj.clips[0].notes == ""
+
+
 def test_load_missing_file_raises():
     with pytest.raises(FileNotFoundError):
         ProjectManager.load("nonexistent.vtp")
