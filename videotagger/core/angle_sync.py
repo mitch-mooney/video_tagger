@@ -13,7 +13,8 @@ Re-syncing every period absorbs drift between a continuous recording and a per-q
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
 
 from videotagger.models.project import Period, VideoAngle
 
@@ -47,3 +48,58 @@ def map_to_angle(periods: List[Period], angle: VideoAngle, t: float) -> float:
         return max(0.0, t)
     angle_time = angle.period_starts[period.id] + (t - period.primary_start)
     return max(0.0, angle_time)
+
+
+@dataclass
+class PeriodMark:
+    """One row of the angle-sync table as plain data (no Qt).
+
+    ``secondary_start`` is the start of this period in the secondary footage, or
+    ``None`` if it hasn't been captured yet. ``period_id`` reuses an existing
+    period's id when editing, or is ``None`` for a fresh period.
+    """
+    name: str
+    primary_start: Optional[float] = None
+    secondary_start: Optional[float] = None
+    period_id: Optional[str] = None
+
+
+def build_angle(
+    marks: List[PeriodMark],
+    *,
+    name: str,
+    source_paths: List[str],
+    merged_path: str,
+    existing_angle_id: Optional[str] = None,
+) -> Tuple[List[Period], VideoAngle]:
+    """Build the canonical periods and a secondary :class:`VideoAngle` from table marks.
+
+    The inverse of what :func:`map_to_angle` consumes: each mark becomes a canonical
+    :class:`Period`, and the angle's ``period_starts`` maps each period id to its start
+    time in the secondary footage. Pure — no Qt. Blank names fall back to ``P{n}`` (1-based);
+    a missing ``primary_start`` is ``0.0``; marks without a ``secondary_start`` are left out
+    of ``period_starts``; a blank angle name falls back to ``"Angle 2"`` and empty
+    ``source_paths`` falls back to ``[merged_path]``.
+    """
+    periods: List[Period] = []
+    period_starts: dict = {}
+    for i, mark in enumerate(marks):
+        period = Period(
+            name=(mark.name or f"P{i + 1}").strip(),
+            primary_start=mark.primary_start or 0.0,
+        )
+        if mark.period_id:
+            period.id = mark.period_id
+        periods.append(period)
+        if mark.secondary_start is not None:
+            period_starts[period.id] = mark.secondary_start
+
+    angle = VideoAngle(
+        name=name.strip() or "Angle 2",
+        source_video_paths=source_paths or [merged_path],
+        merged_video_path=merged_path,
+        period_starts=period_starts,
+    )
+    if existing_angle_id:
+        angle.id = existing_angle_id
+    return periods, angle

@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from videotagger.models.project import Period, VideoAngle
+from videotagger.core.angle_sync import PeriodMark, build_angle
 
 _FRAME = 0.04  # ≈ one frame at 25fps, matches the main-window frame step
 
@@ -308,29 +308,22 @@ class AngleSyncDialog(QDialog):
                                 "Load the second angle video before saving.")
             return
 
-        periods: List[Period] = []
-        period_starts: dict = {}
-        for row in range(self._table.rowCount()):
-            name = (self._table.item(row, 0).text() or f"P{row + 1}").strip()
-            primary = self._cell_time(row, self._PRIMARY_COL) or 0.0
-            existing_id = self._table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            period = Period(name=name, primary_start=primary)
-            if existing_id:
-                period.id = existing_id
-            periods.append(period)
-            secondary = self._cell_time(row, self._SECONDARY_COL)
-            if secondary is not None:
-                period_starts[period.id] = secondary
-
-        angle = VideoAngle(
-            name=self._name_edit.text().strip() or "Angle 2",
-            source_video_paths=self._secondary_sources or [self._secondary_merged],
-            merged_video_path=self._secondary_merged,
-            period_starts=period_starts,
+        marks = [
+            PeriodMark(
+                name=self._table.item(row, 0).text(),
+                primary_start=self._cell_time(row, self._PRIMARY_COL),
+                secondary_start=self._cell_time(row, self._SECONDARY_COL),
+                period_id=self._table.item(row, 0).data(Qt.ItemDataRole.UserRole),
+            )
+            for row in range(self._table.rowCount())
+        ]
+        periods, angle = build_angle(
+            marks,
+            name=self._name_edit.text(),
+            source_paths=self._secondary_sources,
+            merged_path=self._secondary_merged,
+            existing_angle_id=self._existing.id if self._existing else None,
         )
-        if self._existing:
-            angle.id = self._existing.id
-
         self._doc.set_secondary_angle(periods, angle)
         self.accept()
 

@@ -1,5 +1,7 @@
 # tests/test_angle_sync.py
-from videotagger.core.angle_sync import active_period, map_to_angle
+from videotagger.core.angle_sync import (
+    PeriodMark, active_period, build_angle, map_to_angle,
+)
 from videotagger.models.project import Period, VideoAngle
 
 
@@ -74,3 +76,74 @@ def test_map_missing_period_start_is_identity():
 def test_map_never_returns_negative():
     angle = VideoAngle(name="X", merged_video_path="x.mp4", period_starts={"p1": 0.0})
     assert map_to_angle([Period(name="Q1", primary_start=100.0, id="p1")], angle, 0.0) == 0.0
+
+
+# ── build_angle (pure inverse: table marks -> periods + angle) ────────────────
+
+def test_build_angle_basic_periods_and_starts():
+    marks = [
+        PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0),
+        PeriodMark(name="Q2", primary_start=1000.0, secondary_start=600.0),
+    ]
+    periods, angle = build_angle(
+        marks, name="Broadcast", source_paths=["b.mp4"], merged_path="b.mp4",
+    )
+    assert [p.name for p in periods] == ["Q1", "Q2"]
+    assert [p.primary_start for p in periods] == [10.0, 1000.0]
+    assert angle.name == "Broadcast"
+    assert angle.merged_video_path == "b.mp4"
+    # period_starts is keyed by the generated period ids, in order
+    assert angle.period_starts[periods[0].id] == 5.0
+    assert angle.period_starts[periods[1].id] == 600.0
+
+
+def test_build_angle_reuses_period_id():
+    marks = [PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0, period_id="p1")]
+    periods, angle = build_angle(
+        marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4",
+    )
+    assert periods[0].id == "p1"
+    assert angle.period_starts == {"p1": 5.0}
+
+
+def test_build_angle_generates_period_id_when_absent():
+    marks = [PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0)]
+    periods, _ = build_angle(
+        marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4",
+    )
+    assert periods[0].id  # a fresh uuid was assigned
+
+
+def test_build_angle_omits_missing_secondary_start():
+    marks = [
+        PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0, period_id="p1"),
+        PeriodMark(name="Q2", primary_start=1000.0, secondary_start=None, period_id="p2"),
+    ]
+    _, angle = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert angle.period_starts == {"p1": 5.0}
+
+
+def test_build_angle_blank_name_falls_back_to_positional():
+    marks = [PeriodMark(name="", primary_start=10.0), PeriodMark(name="  ", primary_start=20.0)]
+    periods, _ = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert periods[0].name == "P1"
+    assert periods[1].name == ""  # whitespace is truthy then stripped, matching old behavior
+
+
+def test_build_angle_none_primary_defaults_to_zero():
+    marks = [PeriodMark(name="Q1", primary_start=None)]
+    periods, _ = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert periods[0].primary_start == 0.0
+
+
+def test_build_angle_name_and_source_fallbacks():
+    _, angle = build_angle([], name="   ", source_paths=[], merged_path="merged.mp4")
+    assert angle.name == "Angle 2"
+    assert angle.source_video_paths == ["merged.mp4"]
+
+
+def test_build_angle_reuses_existing_angle_id():
+    _, angle = build_angle(
+        [], name="B", source_paths=["b.mp4"], merged_path="b.mp4", existing_angle_id="a1",
+    )
+    assert angle.id == "a1"
