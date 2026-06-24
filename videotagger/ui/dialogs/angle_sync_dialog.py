@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from videotagger.core.angle_sync import PeriodMark, build_angle
+from videotagger.core.angle_sync import PeriodMark, build_angle, unsynced_periods
 
 _FRAME = 0.04  # ≈ one frame at 25fps, matches the main-window frame step
 
@@ -131,6 +131,7 @@ class AngleSyncDialog(QDialog):
         self._secondary_sources: List[str] = (
             list(self._existing.source_video_paths) if self._existing else []
         )
+        self._primary_swapped = False
         self._setup_ui()
         self._load_previews()
         self._populate_periods()
@@ -205,6 +206,10 @@ class AngleSyncDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        make_primary_btn = buttons.addButton(
+            "Make This Angle Primary", QDialogButtonBox.ButtonRole.ActionRole
+        )
+        make_primary_btn.clicked.connect(self._make_primary)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -315,12 +320,12 @@ class AngleSyncDialog(QDialog):
             return None
         return item.data(Qt.ItemDataRole.UserRole)
 
-    def _accept(self):
+    def _collect(self):
+        """Build (periods, angle) from the table, or None if no second angle loaded."""
         if not self._secondary_merged:
             QMessageBox.warning(self, "Required",
                                 "Load the second angle video before saving.")
-            return
-
+            return None
         marks = [
             PeriodMark(
                 name=self._table.item(row, 0).text(),
@@ -330,14 +335,54 @@ class AngleSyncDialog(QDialog):
             )
             for row in range(self._table.rowCount())
         ]
-        periods, angle = build_angle(
+        return build_angle(
             marks,
             name=self._name_edit.text(),
             source_paths=self._secondary_sources,
             merged_path=self._secondary_merged,
             existing_angle_id=self._existing.id if self._existing else None,
         )
+
+    def _accept(self):
+        collected = self._collect()
+        if collected is None:
+            return
+        self._doc.set_secondary_angle(*collected)
+        self.accept()
+
+    def _make_primary(self):
+        """Promote this second angle to the primary (canonical) timeline."""
+        collected = self._collect()
+        if collected is None:
+            return
+        periods, angle = collected
+        if not periods:
+            QMessageBox.warning(self, "No periods",
+                                "Mark at least one period start before making this primary.")
+            return
+        missing = unsynced_periods(periods, angle)
+        if missing:
+            names = ", ".join(p.name for p in missing)
+            QMessageBox.warning(
+                self, "Unsynced periods",
+                "Mark the second-angle start for every period before making it primary.\n\n"
+                f"Missing: {names}")
+            return
+        # Save the angle (with the sync points just entered) so the swap uses them.
         self._doc.set_secondary_angle(periods, angle)
+        n_clips = len(self._doc.project.clips)
+        reply = QMessageBox.question(
+            self, "Make Primary",
+            f"Make “{angle.name or 'this angle'}” the primary video?\n\n"
+            f"• Re-anchors {len(periods)} period(s) to the new timeline\n"
+            f"• Remaps {n_clips} clip(s)\n"
+            f"• Current video becomes the secondary angle “Original”",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Ok,
+        )
+        if reply != QMessageBox.StandardButton.Ok:
+            return
+        self._doc.promote_secondary_to_primary("Original")
+        self._primary_swapped = True
         self.accept()
 
     def done(self, result):

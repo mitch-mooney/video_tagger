@@ -1,9 +1,9 @@
 # tests/test_angle_sync.py
 from videotagger.core.angle_sync import (
     DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, build_periods,
-    map_to_angle, needs_resync,
+    map_to_angle, needs_resync, promote_to_primary, unsynced_periods,
 )
-from videotagger.models.project import Period, VideoAngle
+from videotagger.models.project import Clip, Period, VideoAngle
 
 
 def _periods():
@@ -172,6 +172,63 @@ def test_build_periods_reuses_id():
 
 def test_build_periods_empty():
     assert build_periods([]) == []
+
+
+# ── promote_to_primary (swap which angle is the canonical timeline) ────────────
+
+def _swap_fixture():
+    # Old primary = first-half footage; periods anchored on it.
+    periods = [Period(name="Q1", primary_start=10.0, id="p1"),
+               Period(name="Q2", primary_start=100.0, id="p2")]
+    # Target = whole-match footage, synced to both periods.
+    angle = VideoAngle(name="Whole Match", source_video_paths=["whole.mp4"],
+                       merged_video_path="whole.mp4", period_starts={"p1": 5.0, "p2": 300.0})
+    clips = [Clip(category_id="c", label="Goal", start=20.0, end=30.0, id="k1"),   # in Q1
+             Clip(category_id="c", label="Mark", start=110.0, end=120.0, id="k2")]  # in Q2
+    return periods, clips, angle
+
+
+def test_unsynced_periods_flags_missing():
+    periods = [Period(name="Q1", primary_start=10.0, id="p1"),
+               Period(name="Q2", primary_start=100.0, id="p2")]
+    angle = VideoAngle(name="X", period_starts={"p1": 5.0})
+    assert [p.id for p in unsynced_periods(periods, angle)] == ["p2"]
+    assert unsynced_periods(periods, VideoAngle(name="X", period_starts={"p1": 1, "p2": 2})) == []
+
+
+def test_promote_reanchors_periods_to_new_timeline():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle,
+                           primary_source_paths=["half.mp4"], primary_merged_path="half.mp4")
+    assert [(p.name, p.primary_start, p.id) for p in s.periods] == [("Q1", 5.0, "p1"), ("Q2", 300.0, "p2")]
+
+
+def test_promote_remaps_clips_per_period():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle,
+                           primary_source_paths=["half.mp4"], primary_merged_path="half.mp4")
+    assert (s.clips[0].start, s.clips[0].end) == (15.0, 25.0)     # Q1: 5 + (t-10)
+    assert (s.clips[1].start, s.clips[1].end) == (310.0, 320.0)   # Q2: 300 + (t-100)
+    assert [c.id for c in s.clips] == ["k1", "k2"]                # ids preserved
+
+
+def test_promote_swaps_paths_and_demotes_old_primary():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle, primary_source_paths=["half.mp4"],
+                           primary_merged_path="half.mp4", demoted_name="Original")
+    assert s.merged_video_path == "whole.mp4" and s.source_video_paths == ["whole.mp4"]
+    assert s.demoted_angle.name == "Original"
+    assert s.demoted_angle.merged_video_path == "half.mp4"
+    assert s.demoted_angle.period_starts == {"p1": 10.0, "p2": 100.0}
+
+
+def test_promote_round_trips_clip_times_back_through_demoted_angle():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle,
+                           primary_source_paths=["half.mp4"], primary_merged_path="half.mp4")
+    # mapping a remapped clip back through the demoted angle returns the original time
+    assert map_to_angle(s.periods, s.demoted_angle, s.clips[0].start) == 20.0
+    assert map_to_angle(s.periods, s.demoted_angle, s.clips[1].start) == 110.0
 
 
 # ── needs_resync (the secondary-angle drift decision) ─────────────────────────

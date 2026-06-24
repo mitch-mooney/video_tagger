@@ -16,6 +16,10 @@ canonical terms; use them in code, tests, and architecture discussion.
   (`primary_start`).
 - **Video angle** — an additional camera angle synced onto the canonical timeline per
   period. The primary angle *is* the canonical timeline.
+- **Promote to primary** — swapping the canonical timeline onto a secondary angle:
+  periods re-anchor to the angle's start times, clip times are remapped per-period, and
+  the old primary becomes a secondary angle. Requires every period to be synced in the
+  target angle (then every clip is remappable). Pure: `angle_sync.promote_to_primary`.
 
 ## Application objects
 

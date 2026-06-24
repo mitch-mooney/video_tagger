@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from videotagger.models.project import Period, VideoAngle
+from videotagger.models.project import Clip, Period, VideoAngle
 
 # Re-seek the secondary angle when it drifts more than this (seconds) from the
 # mapped target. ≈ 2 frames at 25fps.
@@ -125,3 +125,64 @@ def build_angle(
     if existing_angle_id:
         angle.id = existing_angle_id
     return periods, angle
+
+
+@dataclass
+class PrimarySwap:
+    """Result of promoting a secondary angle to primary: the re-anchored periods,
+    remapped clips, the new primary's paths, and the old primary as a demoted angle."""
+    periods: List[Period]
+    clips: List[Clip]
+    source_video_paths: List[str]
+    merged_video_path: str
+    demoted_angle: VideoAngle
+
+
+def unsynced_periods(periods: List[Period], angle: VideoAngle) -> List[Period]:
+    """Periods with no sync point in ``angle`` — they can't be re-anchored onto it.
+    A promote is only valid when this is empty (then every clip is remappable too)."""
+    return [p for p in periods if p.id not in angle.period_starts]
+
+
+def promote_to_primary(
+    periods: List[Period],
+    clips: List[Clip],
+    angle: VideoAngle,
+    *,
+    primary_source_paths: List[str],
+    primary_merged_path: str,
+    demoted_name: str = "Original",
+) -> PrimarySwap:
+    """Swap the canonical timeline from the current primary onto ``angle``.
+
+    Pure. Pre-condition: ``unsynced_periods(periods, angle)`` is empty (the caller
+    validates and reports otherwise). Periods are re-anchored to the angle's start
+    times, clip times are remapped per-period (via :func:`map_to_angle`), and the old
+    primary (``primary_*`` paths) becomes a secondary :class:`VideoAngle` whose
+    ``period_starts`` are the periods' old primary times — so it stays perfectly in
+    sync and the remap is exactly reversible.
+    """
+    new_periods = [
+        Period(name=p.name, primary_start=angle.period_starts[p.id], id=p.id)
+        for p in periods
+    ]
+    new_clips = [
+        Clip(category_id=c.category_id, label=c.label,
+             start=map_to_angle(periods, angle, c.start),
+             end=map_to_angle(periods, angle, c.end),
+             notes=c.notes, id=c.id)
+        for c in clips
+    ]
+    demoted = VideoAngle(
+        name=demoted_name,
+        source_video_paths=list(primary_source_paths),
+        merged_video_path=primary_merged_path,
+        period_starts={p.id: p.primary_start for p in periods},
+    )
+    return PrimarySwap(
+        periods=new_periods,
+        clips=new_clips,
+        source_video_paths=list(angle.source_video_paths),
+        merged_video_path=angle.merged_video_path,
+        demoted_angle=demoted,
+    )
