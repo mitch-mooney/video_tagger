@@ -118,6 +118,26 @@ def test_set_periods(doc):
     assert spy.count == 1
 
 
+def test_promote_secondary_to_primary(tmp_path):
+    proj = Project(
+        source_video_paths=["half.mp4"], merged_video_path="half.mp4",
+        periods=[Period(name="Q1", primary_start=10.0, id="p1")],
+        clips=[Clip(category_id="c", label="Goal", start=20.0, end=30.0, id="k1")],
+        angles=[VideoAngle(name="Whole", source_video_paths=["whole.mp4"],
+                           merged_video_path="whole.mp4", period_starts={"p1": 5.0})],
+    )
+    doc = ProjectDocument(proj)
+    spy = Spy()
+    doc.subscribe(spy)
+    doc.promote_secondary_to_primary("Original")
+    assert doc.project.merged_video_path == "whole.mp4"
+    assert doc.project.periods[0].primary_start == 5.0
+    assert (doc.project.clips[0].start, doc.project.clips[0].end) == (15.0, 25.0)
+    assert doc.project.angles[0].name == "Original"
+    assert doc.project.angles[0].merged_video_path == "half.mp4"
+    assert doc.is_dirty is True and spy.count == 1
+
+
 def test_clear_secondary_angle(doc):
     doc.set_secondary_angle([Period(name="Q1", primary_start=0.0)], VideoAngle(name="B"))
     spy = Spy()

@@ -15,7 +15,14 @@ canonical terms; use them in code, tests, and architecture discussion.
 - **Period** — a match segment (quarter/half) anchored on the primary/canonical timeline
   (`primary_start`).
 - **Video angle** — an additional camera angle synced onto the canonical timeline per
-  period. The primary angle *is* the canonical timeline.
+  period. The primary angle *is* the canonical timeline. An angle only **covers** the
+  periods it has a sync point for; where it doesn't (e.g. a quarter it never recorded), it
+  has *no* sync entry (null, never `0:00`) and is treated as unavailable — the toggle goes
+  inert there and playback stays on the primary (`angle_sync.angle_covers`).
+- **Promote to primary** — swapping the canonical timeline onto a secondary angle:
+  periods re-anchor to the angle's start times, clip times are remapped per-period, and
+  the old primary becomes a secondary angle. Requires every period to be synced in the
+  target angle (then every clip is remappable). Pure: `angle_sync.promote_to_primary`.
 
 ## Application objects
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional
 
+from videotagger.core.angle_sync import promote_to_primary
 from videotagger.data.project_manager import ProjectManager
 from videotagger.models.project import (
     Category, Clip, Period, Playlist, Project, VideoAngle,
@@ -84,6 +85,24 @@ class ProjectDocument:
 
     def clear_secondary_angle(self) -> None:
         self._project.angles = []
+        self._changed()
+
+    def promote_secondary_to_primary(self, name: str = "Original") -> None:
+        """Swap the canonical timeline onto the secondary angle: re-anchor periods,
+        remap clip times, and demote the current primary to a secondary angle named
+        ``name``. Caller must ensure a synced secondary exists (no unsynced periods)."""
+        angle = self._project.angles[0]
+        swap = promote_to_primary(
+            self._project.periods, self._project.clips, angle,
+            primary_source_paths=self._project.source_video_paths,
+            primary_merged_path=self._project.merged_video_path,
+            demoted_name=name,
+        )
+        self._project.periods = swap.periods
+        self._project.clips = swap.clips
+        self._project.source_video_paths = swap.source_video_paths
+        self._project.merged_video_path = swap.merged_video_path
+        self._project.angles = [swap.demoted_angle]
         self._changed()
 
     # ── categories ───────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from videotagger.models.project import Period, VideoAngle
+from videotagger.models.project import Clip, Period, VideoAngle
 
 # Re-seek the secondary angle when it drifts more than this (seconds) from the
 # mapped target. ≈ 2 frames at 25fps.
@@ -78,19 +78,57 @@ class PeriodMark:
 def build_periods(marks: List[PeriodMark]) -> List[Period]:
     """Build canonical :class:`Period` objects from table marks. Pure — no Qt.
 
-    Blank names fall back to ``P{n}`` (1-based); a missing ``primary_start`` is ``0.0``;
-    a mark's ``period_id`` is reused when editing, otherwise a fresh id is assigned.
+    A row whose ``primary_start`` was never captured (``None``) is **skipped** — a period
+    must be anchored on the primary, and fabricating a ``0:00`` start would corrupt the
+    timeline. A captured ``0.0`` is kept (a period genuinely starting at video time 0).
+    Blank names fall back to ``P{n}`` (1-based); ``period_id`` is reused when editing.
     """
     periods: List[Period] = []
     for i, mark in enumerate(marks):
+        if mark.primary_start is None:
+            continue
         period = Period(
             name=(mark.name or f"P{i + 1}").strip(),
-            primary_start=mark.primary_start or 0.0,
+            primary_start=mark.primary_start,
         )
         if mark.period_id:
             period.id = mark.period_id
         periods.append(period)
     return periods
+
+
+def _monotonic_starts(periods: List[Period], starts: dict) -> dict:
+    """Drop sync points that fall out of sequence. Periods run forward, so in canonical
+    order a start earlier than an already-kept one is impossible — it's a phantom (e.g. a
+    quarter the angle never recorded, left at 0:00). Such entries are treated as null."""
+    out: dict = {}
+    last = None
+    for p in sorted(periods, key=lambda x: x.primary_start):
+        s = starts.get(p.id)
+        if s is None:
+            continue
+        if last is not None and s < last:
+            continue  # out of order -> bogus
+        out[p.id] = s
+        last = s
+    return out
+
+
+def valid_angle_starts(periods: List[Period], angle: VideoAngle) -> dict:
+    """``angle.period_starts`` with out-of-order (phantom) entries dropped — see
+    :func:`_monotonic_starts`. Use this instead of ``angle.period_starts`` directly so a
+    quarter the angle never recorded (a 0:00 sitting after a real later start) counts as null."""
+    return _monotonic_starts(periods, angle.period_starts)
+
+
+def angle_covers(periods: List[Period], angle: VideoAngle, t: float) -> bool:
+    """Whether ``angle`` has footage at canonical time ``t`` — i.e. the active period
+    has a *valid* sync point in this angle. With no periods, the angle plays lockstep
+    (covered). Uncovered periods are where the angle is unavailable (no seek)."""
+    period = active_period(periods, t)
+    if period is None:
+        return True
+    return period.id in valid_angle_starts(periods, angle)
 
 
 def build_angle(
@@ -110,11 +148,14 @@ def build_angle(
     ``source_paths`` falls back to ``[merged_path]``. (Period naming/id rules: see
     :func:`build_periods`.)
     """
-    periods = build_periods(marks)
+    valid = [m for m in marks if m.primary_start is not None]
+    periods = build_periods(valid)
     period_starts: dict = {}
-    for mark, period in zip(marks, periods):
+    for mark, period in zip(valid, periods):
         if mark.secondary_start is not None:
             period_starts[period.id] = mark.secondary_start
+    # Drop out-of-order starts (a quarter never recorded, left at 0:00) — store as null.
+    period_starts = _monotonic_starts(periods, period_starts)
 
     angle = VideoAngle(
         name=name.strip() or "Angle 2",
@@ -125,3 +166,77 @@ def build_angle(
     if existing_angle_id:
         angle.id = existing_angle_id
     return periods, angle
+
+
+@dataclass
+class PrimarySwap:
+    """Result of promoting a secondary angle to primary: the re-anchored periods,
+    remapped clips, the new primary's paths, and the old primary as a demoted angle."""
+    periods: List[Period]
+    clips: List[Clip]
+    source_video_paths: List[str]
+    merged_video_path: str
+    demoted_angle: VideoAngle
+
+
+def duplicate_anchor_periods(periods: List[Period]) -> List[Period]:
+    """Periods that share a ``primary_start`` with an earlier one — usually phantom
+    periods left at ``0:00``. Duplicate anchors corrupt :func:`active_period` (early
+    times get stolen by the last 0-anchored period), so a promote must refuse them."""
+    seen: set = set()
+    dups: List[Period] = []
+    for p in sorted(periods, key=lambda x: x.primary_start):
+        if p.primary_start in seen:
+            dups.append(p)
+        seen.add(p.primary_start)
+    return dups
+
+
+def unsynced_periods(periods: List[Period], angle: VideoAngle) -> List[Period]:
+    """Periods with no sync point in ``angle`` — they can't be re-anchored onto it.
+    A promote is only valid when this is empty (then every clip is remappable too)."""
+    return [p for p in periods if p.id not in angle.period_starts]
+
+
+def promote_to_primary(
+    periods: List[Period],
+    clips: List[Clip],
+    angle: VideoAngle,
+    *,
+    primary_source_paths: List[str],
+    primary_merged_path: str,
+    demoted_name: str = "Original",
+) -> PrimarySwap:
+    """Swap the canonical timeline from the current primary onto ``angle``.
+
+    Pure. Pre-condition: ``unsynced_periods(periods, angle)`` is empty (the caller
+    validates and reports otherwise). Periods are re-anchored to the angle's start
+    times, clip times are remapped per-period (via :func:`map_to_angle`), and the old
+    primary (``primary_*`` paths) becomes a secondary :class:`VideoAngle` whose
+    ``period_starts`` are the periods' old primary times — so it stays perfectly in
+    sync and the remap is exactly reversible.
+    """
+    new_periods = [
+        Period(name=p.name, primary_start=angle.period_starts[p.id], id=p.id)
+        for p in periods
+    ]
+    new_clips = [
+        Clip(category_id=c.category_id, label=c.label,
+             start=map_to_angle(periods, angle, c.start),
+             end=map_to_angle(periods, angle, c.end),
+             notes=c.notes, id=c.id)
+        for c in clips
+    ]
+    demoted = VideoAngle(
+        name=demoted_name,
+        source_video_paths=list(primary_source_paths),
+        merged_video_path=primary_merged_path,
+        period_starts={p.id: p.primary_start for p in periods},
+    )
+    return PrimarySwap(
+        periods=new_periods,
+        clips=new_clips,
+        source_video_paths=list(angle.source_video_paths),
+        merged_video_path=angle.merged_video_path,
+        demoted_angle=demoted,
+    )

@@ -1,9 +1,10 @@
 # tests/test_angle_sync.py
 from videotagger.core.angle_sync import (
-    DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, build_periods,
-    map_to_angle, needs_resync,
+    DRIFT_TOLERANCE_S, PeriodMark, active_period, angle_covers, build_angle,
+    build_periods, duplicate_anchor_periods, map_to_angle, needs_resync,
+    promote_to_primary, unsynced_periods, valid_angle_starts,
 )
-from videotagger.models.project import Period, VideoAngle
+from videotagger.models.project import Clip, Period, VideoAngle
 
 
 def _periods():
@@ -131,10 +132,13 @@ def test_build_angle_blank_name_falls_back_to_positional():
     assert periods[1].name == ""  # whitespace is truthy then stripped, matching old behavior
 
 
-def test_build_angle_none_primary_defaults_to_zero():
-    marks = [PeriodMark(name="Q1", primary_start=None)]
-    periods, _ = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
-    assert periods[0].primary_start == 0.0
+def test_build_angle_skips_uncaptured_period_rows():
+    # an uncaptured period (no primary start) is dropped, not anchored at 0:00
+    marks = [PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0),
+             PeriodMark(name="Q3", primary_start=None, secondary_start=None)]
+    periods, angle = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert [p.name for p in periods] == ["Q1"]
+    assert list(angle.period_starts.values()) == [5.0]
 
 
 def test_build_angle_name_and_source_fallbacks():
@@ -159,10 +163,17 @@ def test_build_periods_basic():
     assert [p.primary_start for p in periods] == [10.0, 1000.0]
 
 
-def test_build_periods_blank_name_and_none_primary():
-    periods = build_periods([PeriodMark(name="", primary_start=None)])
-    assert periods[0].name == "P1"
-    assert periods[0].primary_start == 0.0
+def test_build_periods_skips_uncaptured_rows():
+    # a row with no captured start is dropped (no fabricated 0:00 anchor)
+    periods = build_periods([PeriodMark(name="Q1", primary_start=10.0),
+                             PeriodMark(name="Q3", primary_start=None)])
+    assert [p.name for p in periods] == ["Q1"]
+
+
+def test_build_periods_keeps_captured_zero():
+    # a genuine 0:00 start (captured) is kept — only None is skipped
+    periods = build_periods([PeriodMark(name="Q1", primary_start=0.0)])
+    assert len(periods) == 1 and periods[0].primary_start == 0.0
 
 
 def test_build_periods_reuses_id():
@@ -172,6 +183,119 @@ def test_build_periods_reuses_id():
 
 def test_build_periods_empty():
     assert build_periods([]) == []
+
+
+# ── angle_covers (is the angle available at a canonical time?) ────────────────
+
+def test_angle_covers_true_when_active_period_synced():
+    assert angle_covers(_periods(), _angle(), 1050.0) is True   # Q2, synced
+
+
+def test_angle_covers_false_when_active_period_missing():
+    half = VideoAngle(name="BG", merged_video_path="bg.mp4", period_starts={"p1": 5.0})
+    assert angle_covers(_periods(), half, 110.0) is True        # Q1, synced
+    assert angle_covers(_periods(), half, 2050.0) is False      # Q3, not synced
+
+
+def test_angle_covers_true_when_no_periods():
+    assert angle_covers([], _angle(), 123.0) is True            # lockstep identity
+
+
+def test_duplicate_anchor_periods_flags_phantom_zero_starts():
+    periods = [Period(name="Q1", primary_start=0.0, id="p1"),
+               Period(name="Q2", primary_start=1676.0, id="p2"),
+               Period(name="Q3", primary_start=0.0, id="p3"),
+               Period(name="Q4", primary_start=0.0, id="p4")]
+    assert {p.name for p in duplicate_anchor_periods(periods)} == {"Q3", "Q4"}
+
+
+def test_duplicate_anchor_periods_none_when_distinct():
+    periods = [Period(name="Q1", primary_start=0.0), Period(name="Q2", primary_start=100.0)]
+    assert duplicate_anchor_periods(periods) == []
+
+
+def test_valid_angle_starts_drops_out_of_order():
+    # behind-goals: Q1@0, Q2@1676, Q3/Q4 left at 0:00 (out of order) -> dropped
+    periods = [Period(name="Q1", primary_start=0.0, id="p1"),
+               Period(name="Q2", primary_start=1676.0, id="p2"),
+               Period(name="Q3", primary_start=3234.0, id="p3"),
+               Period(name="Q4", primary_start=4884.0, id="p4")]
+    angle = VideoAngle(name="BG", period_starts={"p1": 0.0, "p2": 1676.0, "p3": 0.0, "p4": 0.0})
+    assert valid_angle_starts(periods, angle) == {"p1": 0.0, "p2": 1676.0}
+
+
+def test_angle_covers_false_for_out_of_order_quarter():
+    periods = [Period(name="Q1", primary_start=0.0, id="p1"),
+               Period(name="Q2", primary_start=1676.0, id="p2"),
+               Period(name="Q3", primary_start=3234.0, id="p3")]
+    angle = VideoAngle(name="BG", period_starts={"p1": 0.0, "p2": 1676.0, "p3": 0.0})
+    assert angle_covers(periods, angle, 100.0) is True       # Q1 ok
+    assert angle_covers(periods, angle, 3300.0) is False      # Q3 phantom 0:00 -> uncovered
+
+
+def test_build_angle_drops_out_of_order_secondary_start():
+    marks = [PeriodMark(name="Q1", primary_start=0.0, secondary_start=0.0, period_id="p1"),
+             PeriodMark(name="Q2", primary_start=1676.0, secondary_start=1676.0, period_id="p2"),
+             PeriodMark(name="Q3", primary_start=3234.0, secondary_start=0.0, period_id="p3")]
+    _, angle = build_angle(marks, name="BG", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert angle.period_starts == {"p1": 0.0, "p2": 1676.0}   # Q3's 0:00 dropped
+
+
+# ── promote_to_primary (swap which angle is the canonical timeline) ────────────
+
+def _swap_fixture():
+    # Old primary = first-half footage; periods anchored on it.
+    periods = [Period(name="Q1", primary_start=10.0, id="p1"),
+               Period(name="Q2", primary_start=100.0, id="p2")]
+    # Target = whole-match footage, synced to both periods.
+    angle = VideoAngle(name="Whole Match", source_video_paths=["whole.mp4"],
+                       merged_video_path="whole.mp4", period_starts={"p1": 5.0, "p2": 300.0})
+    clips = [Clip(category_id="c", label="Goal", start=20.0, end=30.0, id="k1"),   # in Q1
+             Clip(category_id="c", label="Mark", start=110.0, end=120.0, id="k2")]  # in Q2
+    return periods, clips, angle
+
+
+def test_unsynced_periods_flags_missing():
+    periods = [Period(name="Q1", primary_start=10.0, id="p1"),
+               Period(name="Q2", primary_start=100.0, id="p2")]
+    angle = VideoAngle(name="X", period_starts={"p1": 5.0})
+    assert [p.id for p in unsynced_periods(periods, angle)] == ["p2"]
+    assert unsynced_periods(periods, VideoAngle(name="X", period_starts={"p1": 1, "p2": 2})) == []
+
+
+def test_promote_reanchors_periods_to_new_timeline():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle,
+                           primary_source_paths=["half.mp4"], primary_merged_path="half.mp4")
+    assert [(p.name, p.primary_start, p.id) for p in s.periods] == [("Q1", 5.0, "p1"), ("Q2", 300.0, "p2")]
+
+
+def test_promote_remaps_clips_per_period():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle,
+                           primary_source_paths=["half.mp4"], primary_merged_path="half.mp4")
+    assert (s.clips[0].start, s.clips[0].end) == (15.0, 25.0)     # Q1: 5 + (t-10)
+    assert (s.clips[1].start, s.clips[1].end) == (310.0, 320.0)   # Q2: 300 + (t-100)
+    assert [c.id for c in s.clips] == ["k1", "k2"]                # ids preserved
+
+
+def test_promote_swaps_paths_and_demotes_old_primary():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle, primary_source_paths=["half.mp4"],
+                           primary_merged_path="half.mp4", demoted_name="Original")
+    assert s.merged_video_path == "whole.mp4" and s.source_video_paths == ["whole.mp4"]
+    assert s.demoted_angle.name == "Original"
+    assert s.demoted_angle.merged_video_path == "half.mp4"
+    assert s.demoted_angle.period_starts == {"p1": 10.0, "p2": 100.0}
+
+
+def test_promote_round_trips_clip_times_back_through_demoted_angle():
+    periods, clips, angle = _swap_fixture()
+    s = promote_to_primary(periods, clips, angle,
+                           primary_source_paths=["half.mp4"], primary_merged_path="half.mp4")
+    # mapping a remapped clip back through the demoted angle returns the original time
+    assert map_to_angle(s.periods, s.demoted_angle, s.clips[0].start) == 20.0
+    assert map_to_angle(s.periods, s.demoted_angle, s.clips[1].start) == 110.0
 
 
 # ── needs_resync (the secondary-angle drift decision) ─────────────────────────
