@@ -337,7 +337,7 @@ class MainWindow(QMainWindow):
     def _apply_secondary_angle(self):
         """Wire the project's secondary angle (if any) into the dual-decode player."""
         if self._doc and self._doc.project.angles:
-            from videotagger.core.angle_sync import map_to_angle
+            from videotagger.core.angle_sync import angle_covers, map_to_angle
             angle = self._doc.project.angles[0]
             periods = self._doc.project.periods
             self.player.set_secondary_angle(
@@ -345,6 +345,7 @@ class MainWindow(QMainWindow):
                 lambda t: map_to_angle(periods, angle, t),
                 primary_name="Primary",
                 secondary_name=angle.name,
+                covers=lambda t: angle_covers(periods, angle, t),
             )
             self.shortcut_bar.set_angle_available(True)
         else:

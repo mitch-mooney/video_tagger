@@ -78,19 +78,33 @@ class PeriodMark:
 def build_periods(marks: List[PeriodMark]) -> List[Period]:
     """Build canonical :class:`Period` objects from table marks. Pure — no Qt.
 
-    Blank names fall back to ``P{n}`` (1-based); a missing ``primary_start`` is ``0.0``;
-    a mark's ``period_id`` is reused when editing, otherwise a fresh id is assigned.
+    A row whose ``primary_start`` was never captured (``None``) is **skipped** — a period
+    must be anchored on the primary, and fabricating a ``0:00`` start would corrupt the
+    timeline. A captured ``0.0`` is kept (a period genuinely starting at video time 0).
+    Blank names fall back to ``P{n}`` (1-based); ``period_id`` is reused when editing.
     """
     periods: List[Period] = []
     for i, mark in enumerate(marks):
+        if mark.primary_start is None:
+            continue
         period = Period(
             name=(mark.name or f"P{i + 1}").strip(),
-            primary_start=mark.primary_start or 0.0,
+            primary_start=mark.primary_start,
         )
         if mark.period_id:
             period.id = mark.period_id
         periods.append(period)
     return periods
+
+
+def angle_covers(periods: List[Period], angle: VideoAngle, t: float) -> bool:
+    """Whether ``angle`` has footage at canonical time ``t`` — i.e. the active period
+    has a sync point in this angle. With no periods, the angle plays lockstep (covered).
+    Uncovered periods are where the angle should be treated as unavailable (no seek)."""
+    period = active_period(periods, t)
+    if period is None:
+        return True
+    return period.id in angle.period_starts
 
 
 def build_angle(
@@ -110,9 +124,10 @@ def build_angle(
     ``source_paths`` falls back to ``[merged_path]``. (Period naming/id rules: see
     :func:`build_periods`.)
     """
-    periods = build_periods(marks)
+    valid = [m for m in marks if m.primary_start is not None]
+    periods = build_periods(valid)
     period_starts: dict = {}
-    for mark, period in zip(marks, periods):
+    for mark, period in zip(valid, periods):
         if mark.secondary_start is not None:
             period_starts[period.id] = mark.secondary_start
 

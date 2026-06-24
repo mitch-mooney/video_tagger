@@ -31,6 +31,7 @@ class PlayerWidget(QWidget):
         self._player2: Optional[QMediaPlayer] = None
         self._view2: Optional[ZoomableVideoView] = None
         self._mapper: Optional[Callable[[float], float]] = None
+        self._covers: Optional[Callable[[float], bool]] = None  # secondary has footage here?
         self._angle_names: List[str] = ["Angle 1", "Angle 2"]
         self._current_angle = 0
 
@@ -157,13 +158,18 @@ class PlayerWidget(QWidget):
         mapper: Callable[[float], float],
         primary_name: str = "Angle 1",
         secondary_name: str = "Angle 2",
+        covers: Optional[Callable[[float], bool]] = None,
     ) -> None:
         """Load a second camera angle that plays locked to the primary timeline.
 
         ``mapper`` converts a canonical (primary) time in seconds to this angle's video
-        time in seconds. Both players decode simultaneously so switching is instant.
+        time in seconds. ``covers(t)`` reports whether the angle has footage at canonical
+        time ``t`` — where it doesn't (e.g. a quarter this angle never recorded), the toggle
+        goes inert and playback stays on the primary. Both players decode simultaneously so
+        switching is instant.
         """
         self._mapper = mapper
+        self._covers = covers
         self._angle_names = [primary_name, secondary_name]
 
         if self._player2 is None:
@@ -176,11 +182,14 @@ class PlayerWidget(QWidget):
         self._player2.setSource(QUrl.fromLocalFile(path))
         self._player2.setPlaybackRate(self._player.playbackRate())
         # Align to the current primary position, then match play/pause state.
-        self._player2.setPosition(int(mapper(self.get_position()) * 1000))
-        if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self._player2.play()
+        pos = self.get_position()
+        if self._angle_available(pos):
+            self._player2.setPosition(int(mapper(pos) * 1000))
+            if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self._player2.play()
 
         self._angle_btn.setVisible(True)
+        self._update_angle_availability(pos)
         self._update_angle_button()
 
     def clear_secondary_angle(self) -> None:
@@ -197,10 +206,28 @@ class PlayerWidget(QWidget):
             self._view2.deleteLater()
             self._view2 = None
         self._mapper = None
+        self._covers = None
         self._angle_btn.setVisible(False)
+
+    def _angle_available(self, pos: float) -> bool:
+        """Whether the secondary angle has footage at canonical ``pos``."""
+        return self._covers(pos) if self._covers else True
+
+    def _update_angle_availability(self, pos: float) -> None:
+        """Enable/disable the angle toggle for the current position, and fall back to the
+        primary if the secondary has no footage here."""
+        if self._player2 is None:
+            return
+        available = self._angle_available(pos)
+        self._angle_btn.setEnabled(available)
+        if not available and self._current_angle == 1:
+            self.switch_angle()  # drop back to primary where the angle has no footage
 
     def switch_angle(self) -> None:
         if self._player2 is None:
+            return
+        # Don't switch to the secondary where it has no footage.
+        if self._current_angle == 0 and not self._angle_available(self.get_position()):
             return
         self._current_angle = 1 - self._current_angle
         self._view_stack.setCurrentIndex(self._current_angle)
@@ -228,7 +255,7 @@ class PlayerWidget(QWidget):
     def seek(self, seconds: float) -> None:
         seconds = max(0.0, seconds)
         self._player.setPosition(int(seconds * 1000))
-        if self._player2 is not None and self._mapper is not None:
+        if self._player2 is not None and self._mapper is not None and self._angle_available(seconds):
             self._player2.setPosition(int(self._mapper(seconds) * 1000))
 
     def step(self, seconds: float) -> None:
@@ -274,6 +301,7 @@ class PlayerWidget(QWidget):
             was_blocked = self._seek_slider.blockSignals(True)
             self._seek_slider.setValue(int(pos / self._duration * 10000))
             self._seek_slider.blockSignals(was_blocked)
+        self._update_angle_availability(pos)
         self._correct_drift(pos)
 
     def _correct_drift(self, pos: float) -> None:
@@ -282,6 +310,8 @@ class PlayerWidget(QWidget):
             return
         if self._player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
             return
+        if not self._angle_available(pos):
+            return  # secondary has no footage here — leave it be
         expected = self._mapper(pos)
         actual = self._player2.position() / 1000.0
         if needs_resync(expected, actual):

@@ -1,7 +1,7 @@
 # tests/test_angle_sync.py
 from videotagger.core.angle_sync import (
-    DRIFT_TOLERANCE_S, PeriodMark, active_period, build_angle, build_periods,
-    map_to_angle, needs_resync, promote_to_primary, unsynced_periods,
+    DRIFT_TOLERANCE_S, PeriodMark, active_period, angle_covers, build_angle,
+    build_periods, map_to_angle, needs_resync, promote_to_primary, unsynced_periods,
 )
 from videotagger.models.project import Clip, Period, VideoAngle
 
@@ -131,10 +131,13 @@ def test_build_angle_blank_name_falls_back_to_positional():
     assert periods[1].name == ""  # whitespace is truthy then stripped, matching old behavior
 
 
-def test_build_angle_none_primary_defaults_to_zero():
-    marks = [PeriodMark(name="Q1", primary_start=None)]
-    periods, _ = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
-    assert periods[0].primary_start == 0.0
+def test_build_angle_skips_uncaptured_period_rows():
+    # an uncaptured period (no primary start) is dropped, not anchored at 0:00
+    marks = [PeriodMark(name="Q1", primary_start=10.0, secondary_start=5.0),
+             PeriodMark(name="Q3", primary_start=None, secondary_start=None)]
+    periods, angle = build_angle(marks, name="B", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert [p.name for p in periods] == ["Q1"]
+    assert list(angle.period_starts.values()) == [5.0]
 
 
 def test_build_angle_name_and_source_fallbacks():
@@ -159,10 +162,17 @@ def test_build_periods_basic():
     assert [p.primary_start for p in periods] == [10.0, 1000.0]
 
 
-def test_build_periods_blank_name_and_none_primary():
-    periods = build_periods([PeriodMark(name="", primary_start=None)])
-    assert periods[0].name == "P1"
-    assert periods[0].primary_start == 0.0
+def test_build_periods_skips_uncaptured_rows():
+    # a row with no captured start is dropped (no fabricated 0:00 anchor)
+    periods = build_periods([PeriodMark(name="Q1", primary_start=10.0),
+                             PeriodMark(name="Q3", primary_start=None)])
+    assert [p.name for p in periods] == ["Q1"]
+
+
+def test_build_periods_keeps_captured_zero():
+    # a genuine 0:00 start (captured) is kept — only None is skipped
+    periods = build_periods([PeriodMark(name="Q1", primary_start=0.0)])
+    assert len(periods) == 1 and periods[0].primary_start == 0.0
 
 
 def test_build_periods_reuses_id():
@@ -172,6 +182,22 @@ def test_build_periods_reuses_id():
 
 def test_build_periods_empty():
     assert build_periods([]) == []
+
+
+# ── angle_covers (is the angle available at a canonical time?) ────────────────
+
+def test_angle_covers_true_when_active_period_synced():
+    assert angle_covers(_periods(), _angle(), 1050.0) is True   # Q2, synced
+
+
+def test_angle_covers_false_when_active_period_missing():
+    half = VideoAngle(name="BG", merged_video_path="bg.mp4", period_starts={"p1": 5.0})
+    assert angle_covers(_periods(), half, 110.0) is True        # Q1, synced
+    assert angle_covers(_periods(), half, 2050.0) is False      # Q3, not synced
+
+
+def test_angle_covers_true_when_no_periods():
+    assert angle_covers([], _angle(), 123.0) is True            # lockstep identity
 
 
 # ── promote_to_primary (swap which angle is the canonical timeline) ────────────
