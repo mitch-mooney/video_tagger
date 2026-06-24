@@ -2,7 +2,7 @@
 
 A desktop application for tagging and reviewing sporting footage. Open a video, mark clips with keyboard shortcuts, build playlists, and present or export them.
 
-**Current release: v2.1.0**
+**Current release: v2.1.1**
 
 ---
 

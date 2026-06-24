@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v2.1.1] — 2026-06-22
+
+### Added
+- **Change the primary angle** — promote a synced secondary angle to the primary
+  (canonical) timeline via **Video ▸ Manage Angles ▸ Make This Angle Primary**. Periods
+  re-anchor and existing clips are remapped per-period, so you can (e.g.) start tagging a
+  first-half-only video, then make a whole-match angle the primary and keep your clips. The
+  old primary becomes the secondary angle.
+- **Clear Second** button in Manage Angles to blank a sync point.
+
+### Fixed
+- **Angles that don't cover every period no longer corrupt timing.** A quarter an angle
+  never recorded is treated as null instead of `0:00`: uncaptured starts are no longer
+  fabricated as 0, out-of-order sync points (a start earlier than the period before it) are
+  auto-nulled, the angle toggle goes inert where it has no footage, and **Make Primary**
+  refuses to run when two periods share a start.
+
 ## [v2.1.0] — 2026-06-22
 
 ### Fixed
