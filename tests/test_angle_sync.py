@@ -1,7 +1,8 @@
 # tests/test_angle_sync.py
 from videotagger.core.angle_sync import (
     DRIFT_TOLERANCE_S, PeriodMark, active_period, angle_covers, build_angle,
-    build_periods, map_to_angle, needs_resync, promote_to_primary, unsynced_periods,
+    build_periods, duplicate_anchor_periods, map_to_angle, needs_resync,
+    promote_to_primary, unsynced_periods,
 )
 from videotagger.models.project import Clip, Period, VideoAngle
 
@@ -198,6 +199,19 @@ def test_angle_covers_false_when_active_period_missing():
 
 def test_angle_covers_true_when_no_periods():
     assert angle_covers([], _angle(), 123.0) is True            # lockstep identity
+
+
+def test_duplicate_anchor_periods_flags_phantom_zero_starts():
+    periods = [Period(name="Q1", primary_start=0.0, id="p1"),
+               Period(name="Q2", primary_start=1676.0, id="p2"),
+               Period(name="Q3", primary_start=0.0, id="p3"),
+               Period(name="Q4", primary_start=0.0, id="p4")]
+    assert {p.name for p in duplicate_anchor_periods(periods)} == {"Q3", "Q4"}
+
+
+def test_duplicate_anchor_periods_none_when_distinct():
+    periods = [Period(name="Q1", primary_start=0.0), Period(name="Q2", primary_start=100.0)]
+    assert duplicate_anchor_periods(periods) == []
 
 
 # ── promote_to_primary (swap which angle is the canonical timeline) ────────────

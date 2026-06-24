@@ -153,6 +153,19 @@ class PrimarySwap:
     demoted_angle: VideoAngle
 
 
+def duplicate_anchor_periods(periods: List[Period]) -> List[Period]:
+    """Periods that share a ``primary_start`` with an earlier one — usually phantom
+    periods left at ``0:00``. Duplicate anchors corrupt :func:`active_period` (early
+    times get stolen by the last 0-anchored period), so a promote must refuse them."""
+    seen: set = set()
+    dups: List[Period] = []
+    for p in sorted(periods, key=lambda x: x.primary_start):
+        if p.primary_start in seen:
+            dups.append(p)
+        seen.add(p.primary_start)
+    return dups
+
+
 def unsynced_periods(periods: List[Period], angle: VideoAngle) -> List[Period]:
     """Periods with no sync point in ``angle`` — they can't be re-anchored onto it.
     A promote is only valid when this is empty (then every clip is remappable too)."""

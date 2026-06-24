@@ -13,7 +13,9 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from videotagger.core.angle_sync import PeriodMark, build_angle, unsynced_periods
+from videotagger.core.angle_sync import (
+    PeriodMark, build_angle, duplicate_anchor_periods, unsynced_periods,
+)
 
 _FRAME = 0.04  # ≈ one frame at 25fps, matches the main-window frame step
 
@@ -374,6 +376,16 @@ class AngleSyncDialog(QDialog):
         if not periods:
             QMessageBox.warning(self, "No periods",
                                 "Mark at least one period start before making this primary.")
+            return
+        dups = duplicate_anchor_periods(periods)
+        if dups:
+            names = ", ".join(p.name for p in dups)
+            QMessageBox.warning(
+                self, "Duplicate period starts",
+                "Two or more periods start at the same time (often 0:00 from periods that "
+                "were never marked). Give each a distinct Primary start, or remove the extras, "
+                "before making this primary — otherwise clips get remapped to the wrong period.\n\n"
+                f"Duplicated: {names}")
             return
         missing = unsynced_periods(periods, angle)
         if missing:
