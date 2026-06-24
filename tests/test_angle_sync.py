@@ -2,7 +2,7 @@
 from videotagger.core.angle_sync import (
     DRIFT_TOLERANCE_S, PeriodMark, active_period, angle_covers, build_angle,
     build_periods, duplicate_anchor_periods, map_to_angle, needs_resync,
-    promote_to_primary, unsynced_periods,
+    promote_to_primary, unsynced_periods, valid_angle_starts,
 )
 from videotagger.models.project import Clip, Period, VideoAngle
 
@@ -212,6 +212,33 @@ def test_duplicate_anchor_periods_flags_phantom_zero_starts():
 def test_duplicate_anchor_periods_none_when_distinct():
     periods = [Period(name="Q1", primary_start=0.0), Period(name="Q2", primary_start=100.0)]
     assert duplicate_anchor_periods(periods) == []
+
+
+def test_valid_angle_starts_drops_out_of_order():
+    # behind-goals: Q1@0, Q2@1676, Q3/Q4 left at 0:00 (out of order) -> dropped
+    periods = [Period(name="Q1", primary_start=0.0, id="p1"),
+               Period(name="Q2", primary_start=1676.0, id="p2"),
+               Period(name="Q3", primary_start=3234.0, id="p3"),
+               Period(name="Q4", primary_start=4884.0, id="p4")]
+    angle = VideoAngle(name="BG", period_starts={"p1": 0.0, "p2": 1676.0, "p3": 0.0, "p4": 0.0})
+    assert valid_angle_starts(periods, angle) == {"p1": 0.0, "p2": 1676.0}
+
+
+def test_angle_covers_false_for_out_of_order_quarter():
+    periods = [Period(name="Q1", primary_start=0.0, id="p1"),
+               Period(name="Q2", primary_start=1676.0, id="p2"),
+               Period(name="Q3", primary_start=3234.0, id="p3")]
+    angle = VideoAngle(name="BG", period_starts={"p1": 0.0, "p2": 1676.0, "p3": 0.0})
+    assert angle_covers(periods, angle, 100.0) is True       # Q1 ok
+    assert angle_covers(periods, angle, 3300.0) is False      # Q3 phantom 0:00 -> uncovered
+
+
+def test_build_angle_drops_out_of_order_secondary_start():
+    marks = [PeriodMark(name="Q1", primary_start=0.0, secondary_start=0.0, period_id="p1"),
+             PeriodMark(name="Q2", primary_start=1676.0, secondary_start=1676.0, period_id="p2"),
+             PeriodMark(name="Q3", primary_start=3234.0, secondary_start=0.0, period_id="p3")]
+    _, angle = build_angle(marks, name="BG", source_paths=["b.mp4"], merged_path="b.mp4")
+    assert angle.period_starts == {"p1": 0.0, "p2": 1676.0}   # Q3's 0:00 dropped
 
 
 # ── promote_to_primary (swap which angle is the canonical timeline) ────────────

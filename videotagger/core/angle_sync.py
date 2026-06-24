@@ -97,14 +97,38 @@ def build_periods(marks: List[PeriodMark]) -> List[Period]:
     return periods
 
 
+def _monotonic_starts(periods: List[Period], starts: dict) -> dict:
+    """Drop sync points that fall out of sequence. Periods run forward, so in canonical
+    order a start earlier than an already-kept one is impossible — it's a phantom (e.g. a
+    quarter the angle never recorded, left at 0:00). Such entries are treated as null."""
+    out: dict = {}
+    last = None
+    for p in sorted(periods, key=lambda x: x.primary_start):
+        s = starts.get(p.id)
+        if s is None:
+            continue
+        if last is not None and s < last:
+            continue  # out of order -> bogus
+        out[p.id] = s
+        last = s
+    return out
+
+
+def valid_angle_starts(periods: List[Period], angle: VideoAngle) -> dict:
+    """``angle.period_starts`` with out-of-order (phantom) entries dropped — see
+    :func:`_monotonic_starts`. Use this instead of ``angle.period_starts`` directly so a
+    quarter the angle never recorded (a 0:00 sitting after a real later start) counts as null."""
+    return _monotonic_starts(periods, angle.period_starts)
+
+
 def angle_covers(periods: List[Period], angle: VideoAngle, t: float) -> bool:
     """Whether ``angle`` has footage at canonical time ``t`` — i.e. the active period
-    has a sync point in this angle. With no periods, the angle plays lockstep (covered).
-    Uncovered periods are where the angle should be treated as unavailable (no seek)."""
+    has a *valid* sync point in this angle. With no periods, the angle plays lockstep
+    (covered). Uncovered periods are where the angle is unavailable (no seek)."""
     period = active_period(periods, t)
     if period is None:
         return True
-    return period.id in angle.period_starts
+    return period.id in valid_angle_starts(periods, angle)
 
 
 def build_angle(
@@ -130,6 +154,8 @@ def build_angle(
     for mark, period in zip(valid, periods):
         if mark.secondary_start is not None:
             period_starts[period.id] = mark.secondary_start
+    # Drop out-of-order starts (a quarter never recorded, left at 0:00) — store as null.
+    period_starts = _monotonic_starts(periods, period_starts)
 
     angle = VideoAngle(
         name=name.strip() or "Angle 2",

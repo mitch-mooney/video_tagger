@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from videotagger.core.angle_sync import (
     PeriodMark, build_angle, duplicate_anchor_periods, unsynced_periods,
+    valid_angle_starts,
 )
 
 _FRAME = 0.04  # ≈ one frame at 25fps, matches the main-window frame step
@@ -276,7 +277,8 @@ class AngleSyncDialog(QDialog):
 
     def _populate_periods(self):
         existing = self._project.periods
-        starts = self._existing.period_starts if self._existing else {}
+        # Show out-of-order (phantom 0:00) sync points as blank, not 0:00.
+        starts = valid_angle_starts(existing, self._existing) if self._existing else {}
         if existing:
             for period in existing:
                 self._add_period_row(
