@@ -196,11 +196,17 @@ class AngleSyncDialog(QDialog):
         set_primary.clicked.connect(lambda: self._capture(self._PRIMARY_COL, self._primary_preview))
         set_secondary = QPushButton("Set Second @ Playhead")
         set_secondary.clicked.connect(lambda: self._capture(self._SECONDARY_COL, self._secondary_preview))
+        clear_secondary = QPushButton("Clear Second")
+        clear_secondary.setToolTip(
+            "Clear the second-angle start for the selected period — use this for quarters "
+            "this angle didn't record, so it's left blank rather than 0:00.")
+        clear_secondary.clicked.connect(lambda: self._clear(self._SECONDARY_COL))
         cap_row.addWidget(add_p)
         cap_row.addWidget(rm_p)
         cap_row.addStretch()
         cap_row.addWidget(set_primary)
         cap_row.addWidget(set_secondary)
+        cap_row.addWidget(clear_secondary)
         layout.addLayout(cap_row)
 
         buttons = QDialogButtonBox(
@@ -311,6 +317,15 @@ class AngleSyncDialog(QDialog):
                                     "Select a period row first, then capture.")
             return
         self._table.setItem(row, col, self._time_item(preview.position()))
+
+    def _clear(self, col: int):
+        """Clear a captured time back to blank (null) for the selected period."""
+        row = self._table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Select a period",
+                                    "Select a period row first, then clear.")
+            return
+        self._table.setItem(row, col, self._time_item(None))
 
     # ── Accept ──────────────────────────────────────────────────────────
 
